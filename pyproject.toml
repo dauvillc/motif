@@ -17,6 +17,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "netcdf4>=1.7.3",
     "numpy>=2.3.5",
+    "nvitop>=1.6.1",
     "pandas>=2.3.3",
     "plotly>=6.5.0",
     "pyresample>=1.35.0",
