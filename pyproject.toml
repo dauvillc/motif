@@ -9,6 +9,7 @@ dependencies = [
     "boto3>=1.42.10",
     "bottleneck>=1.6.0",
     "dask>=2025.12.0",
+    "flow-matching>=1.0.10",
     "fsspec>=2025.12.0",
     "global-land-mask>=1.0.0",
     "haversine>=2.9.0",
