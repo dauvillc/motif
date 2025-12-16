@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE
+.vscode/
+.idea/
+
+# PyTorch Lightning
+lightning_logs/
+*.ckpt
+
+# Weights & Biases
+wandb/
+
+# General/Misc
+.DS_Store
+.mypy_cache/
+.pytest_cache/
+.rsyncignore
