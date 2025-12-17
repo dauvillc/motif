@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from multi_sources.data_processing.grid_functions import crop_nan_border
+from motif.data.grid_functions import crop_nan_border
 
 
 def display_solution_html(batch, sol, time_grid, sample_index=0):
@@ -68,8 +68,8 @@ def display_solution_html(batch, sol, time_grid, sample_index=0):
                         z=pred,
                         showscale=False,
                         colorscale="viridis",
-                        xaxis=f"x{2*i-1}",
-                        yaxis=f"y{2*i-1}",
+                        xaxis=f"x{2 * i - 1}",
+                        yaxis=f"y{2 * i - 1}",
                     )
                 )
                 frame_data.append(
@@ -77,17 +77,17 @@ def display_solution_html(batch, sol, time_grid, sample_index=0):
                         z=true,
                         showscale=False,
                         colorscale="viridis",
-                        xaxis=f"x{2*i}",
-                        yaxis=f"y{2*i}",
+                        xaxis=f"x{2 * i}",
+                        yaxis=f"y{2 * i}",
                     )
                 )
             # For 0D sources
             else:
                 frame_data.append(
-                    go.Bar(y=pred, showlegend=False, xaxis=f"x{2*i-1}", yaxis=f"y{2*i-1}")
+                    go.Bar(y=pred, showlegend=False, xaxis=f"x{2 * i - 1}", yaxis=f"y{2 * i - 1}")
                 )
                 frame_data.append(
-                    go.Bar(y=true, showlegend=False, xaxis=f"x{2*i}", yaxis=f"y{2*i}")
+                    go.Bar(y=true, showlegend=False, xaxis=f"x{2 * i}", yaxis=f"y{2 * i}")
                 )
 
         frames.append(go.Frame(data=frame_data, name=f"t{t}"))
@@ -107,11 +107,11 @@ def display_solution_html(batch, sol, time_grid, sample_index=0):
             )
             fig.add_trace(go.Heatmap(z=true, showscale=False, colorscale="viridis"), row=i, col=2)
             # Configure axes for prediction subplot
-            fig.update_xaxes(scaleanchor=f"y{2*i-1}", scaleratio=1, row=i, col=1)
-            fig.update_yaxes(scaleanchor=f"x{2*i-1}", scaleratio=1, row=i, col=1)
+            fig.update_xaxes(scaleanchor=f"y{2 * i - 1}", scaleratio=1, row=i, col=1)
+            fig.update_yaxes(scaleanchor=f"x{2 * i - 1}", scaleratio=1, row=i, col=1)
             # Configure axes for ground truth subplot
-            fig.update_xaxes(scaleanchor=f"y{2*i}", scaleratio=1, row=i, col=2)
-            fig.update_yaxes(scaleanchor=f"x{2*i}", scaleratio=1, row=i, col=2)
+            fig.update_xaxes(scaleanchor=f"y{2 * i}", scaleratio=1, row=i, col=2)
+            fig.update_yaxes(scaleanchor=f"x{2 * i}", scaleratio=1, row=i, col=2)
         else:
             fig.add_trace(go.Bar(y=pred_init, showlegend=False), row=i, col=1)
             fig.add_trace(go.Bar(y=true, showlegend=False), row=i, col=2)
@@ -274,7 +274,7 @@ def display_realizations(
                             pred = pred.item()
                             ax.bar([0], [pred], color="orange")
 
-                        ax.set_title(f"{source_name} Pred {r_idx+1}")
+                        ax.set_title(f"{source_name} Pred {r_idx + 1}")
                     else:
                         ax.set_title(f"{source_name}")
                         ax.axis("off")

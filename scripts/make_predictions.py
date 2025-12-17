@@ -7,13 +7,13 @@ import lightning.pytorch as pl
 import submitit
 import torch
 from hydra.utils import instantiate
-from motif.data.collate_fn import motif_collate_fn
-from motif.data.writer import MotifWriter
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from utils.cfg_utils import update
-from utils.checkpoints import load_experiment_cfg_from_checkpoint
+from motif.data.collate_fn import multi_source_collate_fn
+from motif.data.writer import MultiSourceWriter
+from motif.utils.cfg_utils import update
+from motif.utils.checkpoints import load_experiment_cfg_from_checkpoint
 
 
 class PredictJob(submitit.helpers.Checkpointable):
@@ -47,7 +47,7 @@ class PredictJob(submitit.helpers.Checkpointable):
             dataset,
             **exp_cfg["dataloader"],
             shuffle=cfg.get("shuffle_dataloader", False),
-            collate_fn=motif_collate_fn,
+            collate_fn=multi_source_collate_fn,
             generator=dataloader_rng,
         )
         print("Dataset size:", len(dataset), f" ({split} split)")
@@ -71,7 +71,7 @@ class PredictJob(submitit.helpers.Checkpointable):
         pl_module.load_state_dict(ckpt["state_dict"])
 
         # Custom BasePredictionWriter to save the preds and targets with metadata (eg coords).
-        writer = MotifWriter(
+        writer = MultiSourceWriter(
             run_results_dir, dataset.dt_max, dataset=dataset, **cfg["writer"]
         )
 

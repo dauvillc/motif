@@ -12,11 +12,11 @@ from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint, Mo
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
-from utils.cfg_utils import get_random_code
-from utils.checkpoints import load_experiment_cfg_from_checkpoint
 
 from motif.data.collate_fn import multi_source_collate_fn
 from motif.utils.callbacks import UnusedParameterChecker
+from motif.utils.cfg_utils import get_random_code
+from motif.utils.checkpoints import load_experiment_cfg_from_checkpoint
 
 
 class TrainJob(submitit.helpers.Checkpointable):

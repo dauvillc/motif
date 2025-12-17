@@ -1,14 +1,14 @@
 # Path to where the unpreprocessed datasets are stored
-raw_datasets: "/home/cdauvill/scratch/data/multi_sources/raw/"
+raw_datasets: "/home/cdauvill/scratch/data/motif/raw/"
 # Path to where the preprocessed dataset will be saved
-preprocessed_dataset: "/home/cdauvill/scratch/data/multi_sources/preprocessed_pmw_concat/"
+preprocessed_dataset: "/home/cdauvill/scratch/data/motif/preprocessed_pmw_concat/"
 # Checkpoints directory
 checkpoints: "/home/cdauvill/scratch/checkpoints/"
 # Weights and Biases logs
 wandb_logs: "/home/cdauvill/scratch/"
 # Validation directory
-validation: "/home/cdauvill/scratch/data/multi_sources/validation"
+validation: "/home/cdauvill/scratch/data/motif/validation"
 # Predictions directory
-predictions: "/home/cdauvill/scratch/data/multi_sources/predictions"
+predictions: "/home/cdauvill/scratch/data/motif/predictions"
 # Results (including visualisation of predictions and targets)
-results: "/home/cdauvill/scratch/data/multi_sources/results"
+results: "/home/cdauvill/scratch/data/motif/results"
