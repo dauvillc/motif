@@ -453,10 +453,10 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         if not self.select_most_recent:
             sample_df = sample_df.sample(frac=1, random_state=self.rng.integers(0, 1e6))
 
-        # For each source type, only keep the maximum number of sources
-        # indicate.
+        # For each source type, only keep the maximum number of sources allowed.
         sample_df = sample_df.groupby("source_type", group_keys=False).apply(
-            lambda g: g.head(self.source_types_max_avail.get(g.name, len(g)))
+            lambda g: g.head(self.source_types_max_avail.get(g.name, len(g))),
+            include_groups=False,
         )
 
         # Sort the sample dataframe by time, most recent first
