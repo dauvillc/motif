@@ -4,7 +4,7 @@ defaults:
   - override /lightning_module: deterministic
   - override /lr_scheduler: cosine_warmup_100epochs
   - override /metrics: none
-  - override /model: msvit_8b_d256
+  - override /model: motif_8b_d256
 
 wandb:
   name: det_pmw_gpm

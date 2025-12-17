@@ -4,7 +4,7 @@ defaults:
   - override /lightning_module: deterministic
   - override /lr_scheduler: cosine_warmup_100epochs_higher_min
   - override /metrics: none
-  - override /model: msvit_12b_d512
+  - override /model: motif_12b_d512
   - override /data_augmentation: era5_recentering
 
 lightning_module:
