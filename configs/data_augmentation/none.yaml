@@ -1,0 +1,4 @@
+# Data augmentation config file.
+# This cfg leads to the instantiation of a MultisourceDataAugmentation object.
+_target_: motif.data.data_aug.data_aug.MultisourceDataAugmentation
+augmentation_functions: []

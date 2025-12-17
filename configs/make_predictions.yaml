@@ -1,0 +1,32 @@
+# Config for scripts/make_predictions.py
+defaults:
+  - paths: jz
+  - data_augmentation: none
+  - inference_cfg: default
+  - trainer: predict
+  - setup: ???
+  - _self_
+
+# Seed for seed_everything
+seed: 123
+# Seed for the DataLoader to ensure different models get the same data order
+dataloader_seed: 50
+# Whether to shuffle the dataloader (useful when used with limit_predict_batches)
+shuffle_dataloader: false
+
+run_id: ???
+pred_name: ???
+wandb:
+  name: ${pred_name}_${run_id}
+split: val  # Defaults to the validation set
+
+dataset:
+  train:
+    dataset_dir: ${paths.preprocessed_dataset}
+  val:
+    dataset_dir: ${paths.preprocessed_dataset}
+  test:
+    dataset_dir: ${paths.preprocessed_dataset}
+
+writer: {}
+

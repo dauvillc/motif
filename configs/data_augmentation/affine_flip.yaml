@@ -1,0 +1,56 @@
+# Data augmentation config file.
+# This cfg leads to the instantiation of a MultisourceDataAugmentation object.
+_target_: motif.data.data_augmentation.MultisourceDataAugmentation
+augmentation_functions:
+  era5:
+    # List of data augmentation classes. Such classes must be callable with the signature
+    # `__call__(self, data: Dict[str, Any]) -> Dict[str, Any]`.
+    # the function motif.data.data_augmentation.wrap_tv_image_transform
+    # can be used to wrap torchvision v2 transforms to the expected signature.
+    # For the fill values, use ${nan:}.
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: motif.data.data_augmentation.RandomDynamicCrop
+        min_scale: 0.6
+        max_scale: 0.95
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: torchvision.transforms.v2.RandomAffine
+        degrees: 45
+        translate: [0.25, 0.25]
+        fill: ${nan:}
+    - _target_: motif.data.data_augmentation.AddNoiseToTimeDelta
+      relative_noise_std: 0.0416  # 1/24 (1h for dt max of 24h)
+  infrared:
+  # Same as above
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: motif.data.data_augmentation.RandomDynamicCrop
+        min_scale: 0.6
+        max_scale: 0.95
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: torchvision.transforms.v2.RandomAffine
+        degrees: 45
+        translate: [0.25, 0.25]
+        fill: ${nan:}
+    - _target_: motif.data.data_augmentation.AddNoiseToTimeDelta
+      relative_noise_std: 0.0416
+  pmw:
+  # Same, but with no scaling as resolutions already vary
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: torchvision.transforms.v2.RandomHorizontalFlip
+        p: 0.5
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: torchvision.transforms.v2.RandomVerticalFlip
+        p: 0.5
+    - _target_: motif.data.data_augmentation.wrap_tv_image_transform
+      transform:
+        _target_: torchvision.transforms.v2.RandomAffine
+        degrees: 45
+        translate: [0.25, 0.25]
+        fill: ${nan:}
+    - _target_: motif.data.data_augmentation.AddNoiseToTimeDelta
+      relative_noise_std: 0.0416

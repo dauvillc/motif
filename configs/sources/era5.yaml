@@ -1,0 +1,6 @@
+tc_primed:
+  era5:
+    variables: ['pressure_msl', 'u_wind_10m', 'v_wind_10m', 'sst', 'dist_to_center']
+    input_only: ['sst']
+    output_only: ['dist_to_center']
+

@@ -1,0 +1,209 @@
+paths:
+  raw_datasets: /home/cdauvill/scratch/data/multi_sources/raw/
+  preprocessed_dataset: /home/cdauvill/scratch/data/multi_sources/preprocessed_pmw_concat/
+  checkpoints: /home/cdauvill/scratch/checkpoints/
+  wandb_logs: /home/cdauvill/scratch/
+  validation: /home/cdauvill/scratch/data/multi_sources/validation
+  predictions: /home/cdauvill/scratch/data/multi_sources/predictions
+  results: /home/cdauvill/scratch/data/multi_sources/results
+wandb:
+  project: multi-sources
+  name: det_pmw
+  offline: true
+  group: det_pmw
+sources:
+  tc_primed:
+    pmw:
+      AMSR2_GCOMW1:
+        variables:
+        - TB_36.5H
+        - TB_36.5V
+        - TB_A89.0H
+        - TB_A89.0V
+      GMI_GPM:
+        variables:
+        - TB_36.64H
+        - TB_36.64V
+        - TB_89.0H
+        - TB_89.0V
+      TMI_TRMM:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_85.5H
+        - TB_85.5V
+      SSMI_F11:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_85.5H
+        - TB_85.5V
+      SSMI_F13:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_85.5H
+        - TB_85.5V
+      SSMI_F14:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_85.5H
+        - TB_85.5V
+      SSMI_F15:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_85.5H
+        - TB_85.5V
+      SSMIS_F16:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_91.665H
+        - TB_91.665V
+      SSMIS_F17:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_91.665H
+        - TB_91.665V
+      SSMIS_F18:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_91.665H
+        - TB_91.665V
+      SSMIS_F19:
+        variables:
+        - TB_37.0H
+        - TB_37.0V
+        - TB_91.665H
+        - TB_91.665V
+dataset:
+  train:
+    _target_: motif.data.multi_source_dataset.MultiSourceDataset
+    dataset_dir: ${paths.preprocessed_dataset}
+    split: train
+    included_variables_dict:
+      _target_: motif.data.utils.read_variables_dict
+      variables_dict: ${sources}
+    dt_max: 6
+    dt_max_norm: null
+    min_available_sources: 2
+    source_types_min_avail: {}
+    source_types_max_avail:
+      pmw: 3
+    min_ref_time_delta: 0
+    num_workers: ${dataloader.num_workers}
+    must_include_groups: []
+    select_most_recent: false
+    mask_spatial_coords: []
+    forecasting_lead_time: null
+    forecasting_sources: null
+    limit_samples: null
+    data_augmentation: ${data_augmentation}
+  val:
+    _target_: motif.data.multi_source_dataset.MultiSourceDataset
+    dataset_dir: ${paths.preprocessed_dataset}
+    split: val
+    included_variables_dict:
+      _target_: motif.data.utils.read_variables_dict
+      variables_dict: ${sources}
+    dt_max: ${dataset.train.dt_max}
+    dt_max_norm: ${dataset.train.dt_max_norm}
+    min_available_sources: ${dataset.train.min_available_sources}
+    source_types_min_avail: ${dataset.train.source_types_min_avail}
+    source_types_max_avail: ${dataset.train.source_types_max_avail}
+    min_ref_time_delta: ${dataset.train.min_ref_time_delta}
+    num_workers: ${dataset.train.num_workers}
+    must_include_groups: ${dataset.train.must_include_groups}
+    select_most_recent: ${dataset.train.select_most_recent}
+    forecasting_lead_time: ${dataset.train.forecasting_lead_time}
+    forecasting_sources: ${dataset.train.forecasting_sources}
+    mask_spatial_coords: ${dataset.train.mask_spatial_coords}
+    limit_samples: ${dataset.train.limit_samples}
+    data_augmentation: ${data_augmentation}
+  test:
+    _target_: motif.data.multi_source_dataset.MultiSourceDataset
+    dataset_dir: ${paths.preprocessed_dataset}
+    split: test
+    included_variables_dict:
+      _target_: motif.data.utils.read_variables_dict
+      variables_dict: ${sources}
+    dt_max: ${dataset.train.dt_max}
+    dt_max_norm: ${dataset.train.dt_max_norm}
+    min_available_sources: ${dataset.train.min_available_sources}
+    source_types_min_avail: ${dataset.train.source_types_min_avail}
+    source_types_max_avail: ${dataset.train.source_types_max_avail}
+    min_ref_time_delta: ${dataset.train.min_ref_time_delta}
+    num_workers: ${dataset.train.num_workers}
+    must_include_groups: ${dataset.train.must_include_groups}
+    select_most_recent: ${dataset.train.select_most_recent}
+    forecasting_lead_time: ${dataset.train.forecasting_lead_time}
+    forecasting_sources: ${dataset.train.forecasting_sources}
+    mask_spatial_coords: ${dataset.train.mask_spatial_coords}
+    data_augmentation: ${data_augmentation}
+data_augmentation:
+  _target_: motif.data.data_aug.data_aug.MultisourceDataAugmentation
+  augmentation_functions: []
+dataloader:
+  num_workers: 14
+  batch_size: ???
+  pin_memory: true
+  persistent_workers: true
+lightning_module:
+  _target_: motif.lightning_module.deterministic.MultisourceDeterministicReconstructor
+  patch_size: 4
+  values_dim: ${model.values_dim}
+  coords_dim: ${model.coords_dim}
+  cond_dim: ${model.cond_dim}
+  n_sources_to_mask: 1
+  lr_scheduler_kwargs: ${lr_scheduler}
+  loss_max_distance_from_center: null
+  ignore_land_pixels_in_loss: false
+  adamw_kwargs: ${optimizer}
+  metrics: ${metrics}
+  backbone: ${model.backbone}
+  output_resnet_blocks: ${model.output_resnet_blocks}
+  output_resnet_channels: ${model.output_resnet_channels}
+model:
+  dropout: 0.0
+  values_dim: 512
+  coords_dim: 256
+  cond_dim: 512
+  backbone:
+    _target_: motif.models.motif_double.backbone.MultisourceGeneralBackbone
+    values_dim: ${lightning_module.values_dim}
+    coords_dim: ${lightning_module.coords_dim}
+    cond_dim: ${lightning_module.cond_dim}
+    n_blocks: 12
+    dropout: ${model.dropout}
+    att_inner_ratio: 1.0
+    cross_att_inner_ratio_v: 1.0
+    mlp_inner_ratio: 2.0
+    num_heads: 8
+    cross_att_window_size: 4
+    iwsa_window_size: 8
+  output_resnet_channels: null
+  output_resnet_blocks: null
+trainer:
+  max_epochs: ${lr_scheduler.first_cycle_steps}
+  accelerator: gpu
+  devices: 1
+  precision: bf16
+  gradient_clip_val: 1.0
+  strategy: ddp
+lr_scheduler:
+  warmup_steps: 2
+  first_cycle_steps: 150
+  cycle_mult: 1.0
+  max_lr: 0.0003
+  min_lr: 1.0e-07
+  gamma: 1.0
+optimizer:
+  lr: 0.001
+  weight_decay: 0.05
+metrics: {}
+launch_without_submitit: true
+seed: 42

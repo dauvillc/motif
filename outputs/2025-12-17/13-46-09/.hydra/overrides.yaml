@@ -1,0 +1,3 @@
+- experiment=det_pmw
+- model=motif_12b_d512
+- setup=local

@@ -1,0 +1,17 @@
+dropout: 0.0
+values_dim: 512
+coords_dim: 256
+backbone:
+  _target_: motif.models.perceiver.core.MultisourcePerceiver
+  values_dim: ${model.values_dim}
+  coords_dim: ${model.coords_dim}
+  latent_seq_len: 256
+  num_blocks: 12
+  att_inner_ratio: 1
+  num_heads: 8
+  mlp_inner_ratio: 2
+  mlp_hidden_layers: 1
+  dropout: ${model.dropout}
+
+output_resnet_blocks: null
+output_resnet_channels: null

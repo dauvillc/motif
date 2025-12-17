@@ -1,0 +1,316 @@
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+from multi_sources.data_processing.grid_functions import crop_nan_border
+
+
+def display_solution_html(batch, sol, time_grid, sample_index=0):
+    """Display the solution and groundtruth of the flow matching process using plotly.
+
+    Args:
+        batch (dict): The input batch containing the original data, with (source_name, index) tuples as keys
+        sol (dict): The solution of the flow matching process, as a dict mapping
+            (source_name, index) tuples to tensors of shape (T, B, C, ...).
+        time_grid (torch.Tensor): Time points of shape (T,)
+        sample_index (int, optional): Index of the sample to display. Defaults to 0.
+
+    Returns:
+        plotly.graph_objects.Figure: Interactive figure with slider
+    """
+    # Number of time steps
+    T = len(time_grid)
+
+    # Filter out unavailable sources
+    available_sources = {
+        source_index_pair: data
+        for source_index_pair, data in batch.items()
+        if data["avail"][sample_index].item() != -1  # Use sample_index
+    }
+    n_sources = len(available_sources)
+
+    subplot_titles = []
+    for source_index_pair in available_sources.keys():
+        source_name, index = source_index_pair
+        dt = batch[source_index_pair]["dt"][sample_index].item()  # Use sample_index
+        subplot_titles.append(f"{source_name} (index={index}, dt={dt:.3f}) Prediction")
+        subplot_titles.append(f"{source_name} (index={index}, dt={dt:.3f}) Ground Truth")
+
+    # Create figure with subplots
+    fig = make_subplots(
+        rows=n_sources,
+        cols=2,
+        subplot_titles=subplot_titles,
+        horizontal_spacing=0.05,
+        vertical_spacing=0.05,
+    )
+
+    # For each source, create a frame for each timestep
+    frames = []
+    for t in range(T):
+        frame_data = []
+        for i, (source_index_pair, source_data) in enumerate(available_sources.items(), start=1):
+            # Get prediction and ground truth
+            pred = (
+                sol[source_index_pair][t, sample_index, 0].detach().cpu().float().numpy()
+            )  # Use sample_index
+            true = (
+                source_data["values"][sample_index, 0].detach().cpu().float().numpy()
+            )  # Use sample_index
+
+            # For 2D sources
+            if len(pred.shape) == 2:
+                frame_data.append(
+                    go.Heatmap(
+                        z=pred,
+                        showscale=False,
+                        colorscale="viridis",
+                        xaxis=f"x{2*i-1}",
+                        yaxis=f"y{2*i-1}",
+                    )
+                )
+                frame_data.append(
+                    go.Heatmap(
+                        z=true,
+                        showscale=False,
+                        colorscale="viridis",
+                        xaxis=f"x{2*i}",
+                        yaxis=f"y{2*i}",
+                    )
+                )
+            # For 0D sources
+            else:
+                frame_data.append(
+                    go.Bar(y=pred, showlegend=False, xaxis=f"x{2*i-1}", yaxis=f"y{2*i-1}")
+                )
+                frame_data.append(
+                    go.Bar(y=true, showlegend=False, xaxis=f"x{2*i}", yaxis=f"y{2*i}")
+                )
+
+        frames.append(go.Frame(data=frame_data, name=f"t{t}"))
+
+    # Add the initial data to the figure
+    for i, (source_index_pair, source_data) in enumerate(available_sources.items(), start=1):
+        pred_init = (
+            sol[source_index_pair][0, sample_index, 0].detach().cpu().float().numpy()
+        )  # Use sample_index
+        true = (
+            source_data["values"][sample_index, 0].detach().cpu().float().numpy()
+        )  # Use sample_index
+
+        if len(pred_init.shape) == 2:
+            fig.add_trace(
+                go.Heatmap(z=pred_init, showscale=False, colorscale="viridis"), row=i, col=1
+            )
+            fig.add_trace(go.Heatmap(z=true, showscale=False, colorscale="viridis"), row=i, col=2)
+            # Configure axes for prediction subplot
+            fig.update_xaxes(scaleanchor=f"y{2*i-1}", scaleratio=1, row=i, col=1)
+            fig.update_yaxes(scaleanchor=f"x{2*i-1}", scaleratio=1, row=i, col=1)
+            # Configure axes for ground truth subplot
+            fig.update_xaxes(scaleanchor=f"y{2*i}", scaleratio=1, row=i, col=2)
+            fig.update_yaxes(scaleanchor=f"x{2*i}", scaleratio=1, row=i, col=2)
+        else:
+            fig.add_trace(go.Bar(y=pred_init, showlegend=False), row=i, col=1)
+            fig.add_trace(go.Bar(y=true, showlegend=False), row=i, col=2)
+
+    # Update layout with slider
+    fig.update_layout(
+        sliders=[
+            {
+                "currentvalue": {"prefix": "t = "},
+                "steps": [
+                    {
+                        "args": [
+                            [f"t{t}"],
+                            {
+                                "frame": {"duration": 0, "redraw": True},
+                                "mode": "immediate",
+                            },
+                        ],
+                        "label": f"{time_grid[t]:.2f}",
+                        "method": "animate",
+                    }
+                    for t in range(T)
+                ],
+            }
+        ],
+        updatemenus=[
+            {
+                "type": "buttons",
+                "showactive": False,
+                "buttons": [
+                    {
+                        "label": "Play",
+                        "method": "animate",
+                        "args": [
+                            None,
+                            {
+                                "frame": {"duration": 100, "redraw": True},
+                                "fromcurrent": True,
+                                "mode": "immediate",
+                                "transition": {"duration": 0},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
+    )
+
+    # Add frames to the figure
+    fig.frames = frames
+
+    return fig
+
+
+def display_realizations(
+    sol, batch, avail_flags, save_filepath_prefix, deterministic=False, display_fraction=1.0
+):
+    """Given multiple solutions of the flow matching process, creates one figure
+    per sample to display the solutions and groundtruth.
+    Args:
+        sol (dict): The solution of the flow matching process, as a dict mapping
+            (source_name, index) tuples to tensors of shape (Np, B, C, ...)
+            where Np is the number of realizations, B is the batch size, and C
+            is the number of channels.
+        batch (dict): Dict mapping (source_name, index) tuples to data dicts.
+            For each source-index pair, batch[(source_name, index)] must contains
+            the following entries: "values", of shape (B, C, ...).
+        avail_flags (dict): Dictionary {(source_name, index): avail_flag_s} where avail_flag_s is a
+            tensor of shape (B,) containing 1 if the value is available, 0 if it was
+            masked and -1 if it was not available.
+        save_filepath_prefix (str or Path): Prefix of the filepath where the figure will be saved.
+            The figure will be saved as save_filepath_prefix + "_{sample_idx}.png".
+        deterministic (bool, optional): If True, expects sol to be a tensor of shape (B, C, ...).
+        display_fraction (float, optional): Fraction of the samples to display. Defaults to 1.0.
+    """
+    try:
+        save_filepath_prefix = Path(save_filepath_prefix)
+        # Make sure parent directory exists
+        save_filepath_prefix.parent.mkdir(parents=True, exist_ok=True)
+
+        # Make the deterministic case compatible with the non-deterministic case
+        if deterministic:
+            sol = {
+                source_index_pair: sol_s.unsqueeze(0) for source_index_pair, sol_s in sol.items()
+            }
+
+        # Extract batch size and number of realizations
+        any_source_index_pair = next(iter(sol.keys()))
+        n_realizations = sol[any_source_index_pair].shape[0]
+        batch_size = sol[any_source_index_pair].shape[1]
+
+        # Take a fraction of the samples, evenly spaced
+        samples_to_display = np.linspace(
+            0, batch_size - 1, int(display_fraction * batch_size)
+        ).astype(int)
+
+        # For each sample
+        for sample_idx in samples_to_display:
+            # Get available sources for this sample (either masked or available)
+            source_index_pairs = [
+                source_index_pair
+                for source_index_pair, flags in avail_flags.items()
+                if flags[sample_idx].item() != -1  # Either masked (0) or available (1)
+            ]
+
+            if not source_index_pairs:
+                continue  # Skip if no sources are available or masked
+
+            # Create a figure with n_realizations + 1 columns (realizations + groundtruth)
+            # and one row per source
+            fig, axs = plt.subplots(
+                nrows=len(source_index_pairs),
+                ncols=n_realizations + 1,
+                figsize=(3 * (n_realizations + 1), 3 * len(source_index_pairs)),
+                squeeze=False,
+            )
+
+            # For each source-index pair
+            for src_idx, source_index_pair in enumerate(source_index_pairs):
+                source_name, index = source_index_pair
+                is_masked = avail_flags[source_index_pair][sample_idx].item() == 0
+
+                # For each realization
+                for r_idx in range(n_realizations):
+                    ax = axs[src_idx, r_idx]
+                    # Get original coordinates
+                    coords = batch[source_index_pair]["coords"][sample_idx]  # (2, H, W), lat/lon
+
+                    # Only show prediction if the source was masked
+                    if is_masked:
+                        # Get prediction data
+                        pred = sol[source_index_pair][r_idx, sample_idx, 0]
+
+                        # Display data based on dimensionality
+                        if len(pred.shape) == 2:
+                            # The images' borders may be NaN due to the batching system.
+                            # Crop the NaN borders to display the images correctly.
+                            pred = crop_nan_border(coords, [pred.unsqueeze(0)])[0].squeeze(0)
+                            pred = pred.detach().cpu().float().numpy()
+                            ax.imshow(pred, cmap="viridis")
+                            # Add coords as axis labels
+                            h, w = pred.shape
+                            x_vals = np.nanmean(
+                                coords[1, :, :w].detach().cpu().float().numpy(), axis=0
+                            )
+                            y_vals = np.nanmean(
+                                coords[0, :h, :].detach().cpu().float().numpy(), axis=1
+                            )
+                            step_x = max(1, w // 5)
+                            step_y = max(1, h // 5)
+                            ax.set_xticks(range(0, w, step_x))
+                            ax.set_yticks(range(0, h, step_y))
+                            ax.set_xticklabels(
+                                [f"{val:.2f}" for val in x_vals[0::step_x]], rotation=45
+                            )
+                            ax.set_yticklabels([f"{val:.2f}" for val in y_vals[0::step_y]])
+                        else:  # For 0D or 1D data
+                            if len(pred.shape) == 1:
+                                pred = pred[0]
+                            pred = pred.item()
+                            ax.bar([0], [pred], color="orange")
+
+                        ax.set_title(f"{source_name} Pred {r_idx+1}")
+                    else:
+                        ax.set_title(f"{source_name}")
+                        ax.axis("off")
+
+                # Display groundtruth in the last column
+                ax = axs[src_idx, -1]
+                # Get groundtruth
+                true = batch[source_index_pair]["values"][sample_idx, 0]
+
+                if len(true.shape) == 2:
+                    true = crop_nan_border(coords, [true.unsqueeze(0)])[0].squeeze(0)
+                    true = true.detach().cpu().float().numpy()
+                    ax.imshow(true, cmap="viridis")
+                    h, w = true.shape
+                    x_vals = np.nanmean(coords[1, :, :w].detach().cpu().float().numpy(), axis=0)
+                    y_vals = np.nanmean(coords[0, :h, :].detach().cpu().float().numpy(), axis=1)
+                    step_x = max(1, w // 5)
+                    step_y = max(1, h // 5)
+                    ax.set_xticks(range(0, w, step_x))
+                    ax.set_yticks(range(0, h, step_y))
+                    ax.set_xticklabels([f"{val:.2f}" for val in x_vals[0::step_x]], rotation=45)
+                    ax.set_yticklabels([f"{val:.2f}" for val in y_vals[0::step_y]])
+                else:
+                    if len(true.shape) == 1:
+                        true = true[0]
+                    true = true.item()
+                    ax.bar([0], [true], color="orange")
+
+                dt = batch[source_index_pair]["dt"][sample_idx].item()
+                ax.set_title(f"{source_name} dt={dt:.3f} GT")
+
+            plt.tight_layout()
+            # Save figure
+            save_path = f"{save_filepath_prefix}_{sample_idx}.png"
+            plt.savefig(save_path)
+            plt.close(fig)
+    finally:
+        # Ensure all figures are closed even if an exception occurs
+        plt.close("all")

@@ -13,6 +13,11 @@ wheels/
 .vscode/
 .idea/
 
+# Output directories
+outputs/
+logs/
+submitit/
+
 # PyTorch Lightning
 lightning_logs/
 *.ckpt

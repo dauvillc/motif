@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - override /paths: cleps
+
+setup:
+  timeout_min: 240
+  slurm_cpus_per_task: 40
+  slurm_ntasks_per_node: 1
+  name: ${eval_name}
+  slurm_signal_delay_s: 120
+  slurm_additional_parameters:
+    hint: multithread
+  local_setup:
+    - module purge
+    - source ~/.bash_profile
+    - mamba activate ms312
+  
+num_workers: 39

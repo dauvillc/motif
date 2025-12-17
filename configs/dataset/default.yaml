@@ -1,0 +1,85 @@
+# Train dataset
+train:
+  _target_: motif.data.multi_source_dataset.MultiSourceDataset
+  dataset_dir: ${paths.preprocessed_dataset}
+  split: train
+  included_variables_dict:
+    _target_: motif.data.utils.read_variables_dict
+    variables_dict: ${sources}
+  # Maximum difference of time in hours between an observation's timconf/data_augmentation/era5_cropping.yamle
+  # and the sample's reference time.
+  dt_max: ???
+  dt_max_norm: null
+  # Minimum number of sources that must be available in a sample
+  # for it to be included in the dataset.
+  min_available_sources: ???
+  # Minimum number of sources of each type that must be available in a sample
+  # for it to be included in the dataset.
+  # Unspecified source types means at least 0 sources of that type (no restriction).
+  source_types_min_avail: {}
+  # For each source type, max number of observations that can be included for each
+  # source of that type.
+  source_types_max_avail: {}
+  # Minimum difference in hours between two samples of the same storm.
+  # This can be used to reduce redundancy and limit the number of samples.
+  min_ref_time_delta: 0
+  # Number of workers for the data loading
+  num_workers: ${dataloader.num_workers}
+  # List of source names that must be included in each sample
+  must_include_groups: []
+  # By default, don't select the most recent sources
+  select_most_recent: false
+  # Whether to mask the spatial coordinates of the sources
+  mask_spatial_coords: []
+  # Whether to do forecasting
+  forecasting_lead_time: null
+  forecasting_sources: null
+  # Optionally limit the number of samples (for quicker experiments)
+  limit_samples: null  # Either float (fraction) or int (number of samples)
+  # Data augmentation to apply
+  data_augmentation: ${data_augmentation}
+
+# Validation dataset
+val:
+  _target_: motif.data.multi_source_dataset.MultiSourceDataset
+  dataset_dir: ${paths.preprocessed_dataset}
+  split: val
+  included_variables_dict:
+    _target_: motif.data.utils.read_variables_dict
+    variables_dict: ${sources}
+  dt_max: ${dataset.train.dt_max}
+  dt_max_norm: ${dataset.train.dt_max_norm}
+  min_available_sources: ${dataset.train.min_available_sources}
+  source_types_min_avail: ${dataset.train.source_types_min_avail}
+  source_types_max_avail: ${dataset.train.source_types_max_avail}
+  min_ref_time_delta: ${dataset.train.min_ref_time_delta}
+  num_workers: ${dataset.train.num_workers}
+  must_include_groups: ${dataset.train.must_include_groups}
+  select_most_recent: ${dataset.train.select_most_recent}
+  forecasting_lead_time: ${dataset.train.forecasting_lead_time}
+  forecasting_sources: ${dataset.train.forecasting_sources}
+  mask_spatial_coords: ${dataset.train.mask_spatial_coords}
+  limit_samples: ${dataset.train.limit_samples}
+  data_augmentation: ${data_augmentation}
+
+# Test dataset
+test:
+  _target_: motif.data.multi_source_dataset.MultiSourceDataset
+  dataset_dir: ${paths.preprocessed_dataset}
+  split: test
+  included_variables_dict:
+    _target_: motif.data.utils.read_variables_dict
+    variables_dict: ${sources}
+  dt_max: ${dataset.train.dt_max}
+  dt_max_norm: ${dataset.train.dt_max_norm}
+  min_available_sources: ${dataset.train.min_available_sources}
+  source_types_min_avail: ${dataset.train.source_types_min_avail}
+  source_types_max_avail: ${dataset.train.source_types_max_avail}
+  min_ref_time_delta: ${dataset.train.min_ref_time_delta}
+  num_workers: ${dataset.train.num_workers}
+  must_include_groups: ${dataset.train.must_include_groups}
+  select_most_recent: ${dataset.train.select_most_recent}
+  forecasting_lead_time: ${dataset.train.forecasting_lead_time}
+  forecasting_sources: ${dataset.train.forecasting_sources}
+  mask_spatial_coords: ${dataset.train.mask_spatial_coords}
+  data_augmentation: ${data_augmentation}

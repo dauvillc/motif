@@ -1,0 +1,27 @@
+# @package _global_
+defaults:
+  - override /sources: era5
+  - override /lightning_module: deterministic
+  - override /lr_scheduler: cosine_warmup_150epochs
+  - override /metrics: none
+  - override /model: msvit_12b_d512
+
+lightning_module:
+  patch_size: 4
+  forecasting_mode: true
+
+wandb:
+  name: det_era5
+  group: det_era5
+
+dataset:
+  train:
+    dt_max: 6
+    min_available_sources: 1
+    source_types_max_avail:
+      era5: 4
+    forecasting_lead_time: 21
+    forecasting_sources: ['tc_primed_era5']
+
+trainer:
+  strategy: ddp

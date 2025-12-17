@@ -1,0 +1,15 @@
+tc_primed:
+  pmw:
+    GMI_GPM:
+      S1:
+        variables: ['TB_36.64H']
+    TMI_TRMM:
+      S2:
+        variables: ['TB_37.0H']
+  radar:
+    GMI_GPM:
+      KuGMI:
+        variables: ['nearSurfPrecipTotRate']
+    TMI_TRMM:
+      KuTMI:
+        variables: ['nearSurfPrecipTotRate']

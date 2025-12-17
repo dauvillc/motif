@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - override /paths: cleps
+
+setup:
+  timeout_min: 240
+  slurm_partition: "gpu"
+  slurm_exclude: "gpu014"
+  slurm_cpus_per_gpu: 6
+  slurm_ntasks_per_node: ${trainer.devices}
+  slurm_gres: "gpu:4"
+  slurm_additional_parameters:
+    hint: multithread
+  name: ${wandb.name}
+  slurm_signal_delay_s: 120
+  local_setup:
+    - module purge
+    - source ~/.bash_profile
+    - mamba activate ms312 
+
+trainer:
+  devices: 4
+
+dataloader:
+  num_workers: 5
