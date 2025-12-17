@@ -1,8 +1,0 @@
-- +wandb.mode=disabled
-- experiment=diff_pmw_gpm
-- lightning_module.patch_size=4
-- model=motif_ds_12b_d256
-- setup=local
-- dataloader.batch_size=1
-- dataloader.num_workers=0
-- dataloader.persistent_workers=false
