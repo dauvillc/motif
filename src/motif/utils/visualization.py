@@ -239,6 +239,8 @@ def display_realizations(
                     ax = axs[src_idx, r_idx]
                     # Get original coordinates
                     coords = batch[source_index_pair]["coords"][sample_idx]  # (2, H, W), lat/lon
+                    # Create a version of the coordinates without the nan borders
+                    coords_no_nan = crop_nan_border(coords, [coords])[0]
 
                     # Only show prediction if the source was masked
                     if is_masked:
@@ -255,10 +257,10 @@ def display_realizations(
                             # Add coords as axis labels
                             h, w = pred.shape
                             x_vals = np.nanmean(
-                                coords[1, :, :w].detach().cpu().float().numpy(), axis=0
+                                coords_no_nan[1, :, :w].detach().cpu().float().numpy(), axis=0
                             )
                             y_vals = np.nanmean(
-                                coords[0, :h, :].detach().cpu().float().numpy(), axis=1
+                                coords_no_nan[0, :h, :].detach().cpu().float().numpy(), axis=1
                             )
                             step_x = max(1, w // 5)
                             step_y = max(1, h // 5)
@@ -289,8 +291,12 @@ def display_realizations(
                     true = true.detach().cpu().float().numpy()
                     ax.imshow(true, cmap="viridis")
                     h, w = true.shape
-                    x_vals = np.nanmean(coords[1, :, :w].detach().cpu().float().numpy(), axis=0)
-                    y_vals = np.nanmean(coords[0, :h, :].detach().cpu().float().numpy(), axis=1)
+                    x_vals = np.nanmean(
+                        coords_no_nan[1, :, :w].detach().cpu().float().numpy(), axis=0
+                    )
+                    y_vals = np.nanmean(
+                        coords_no_nan[0, :h, :].detach().cpu().float().numpy(), axis=1
+                    )
                     step_x = max(1, w // 5)
                     step_y = max(1, h // 5)
                     ax.set_xticks(range(0, w, step_x))

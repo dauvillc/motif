@@ -22,9 +22,9 @@ def crop_nan_border(src_image, tgt_images):
     row_full_nan = torch.isnan(src_image).all(dim=(0, 2)).int()
     col_full_nan = torch.isnan(src_image).all(dim=(0, 1)).int()
     first_row = torch.argmax(~row_full_nan).item()
-    last_row = row_full_nan.size(0) - torch.argmax(~row_full_nan.flip(dims=[0])).item() + 1
+    last_row = row_full_nan.size(0) - torch.argmax(~row_full_nan.flip(dims=[0])).item()
     first_col = torch.argmax(~col_full_nan).item()
-    last_col = col_full_nan.size(0) - torch.argmax(~col_full_nan.flip(dims=[0])).item() + 1
+    last_col = col_full_nan.size(0) - torch.argmax(~col_full_nan.flip(dims=[0])).item()
 
     tgt_images_cropped = []
     for tgt_image in tgt_images:
