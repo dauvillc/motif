@@ -6,12 +6,12 @@ from itertools import chain
 import netCDF4 as nc
 
 
-def list_tc_primed_sources(tc_primed_path, exclude_years=None, source_type="all"):
+def list_tc_primed_sources(tc_primed_path, include_seasons=None, source_type="all"):
     """Recursively find all source files from TC-PRIMED.
 
     Args:
         tc_primed_path (Path): Path to the root directory of TC-PRIMED.
-        exclude_years (list of int, optional): List of years to exclude from the search.
+        include_seasons (list of int, optional): List of years to include in the search.
         source_type (str, optional): Type of sources to return. One of:
             - "all": Return all sources (default)
             - "satellite": Return only satellite sources (pmw, radar and infrared)
@@ -25,7 +25,7 @@ def list_tc_primed_sources(tc_primed_path, exclude_years=None, source_type="all"
             to the list of corresponding groups. For example, ['passive_microwave', 'S4']
             means that the data for the source can be found in ds['passive_microwave']['S4'].
     """
-    storm_files = list_tc_primed_storm_files(tc_primed_path, exclude_years)
+    storm_files = list_tc_primed_storm_files(tc_primed_path, include_seasons=include_seasons)
     overpass_files, environment_files = storm_files
 
     # Get all files
@@ -91,18 +91,18 @@ def list_tc_primed_sources(tc_primed_path, exclude_years=None, source_type="all"
     return all_sources, source_files, source_groups
 
 
-def list_tc_primed_overpass_files_by_sensat(tc_primed_path, exclude_years=None):
+def list_tc_primed_overpass_files_by_sensat(tc_primed_path, include_seasons=None):
     """Lists all overpass files in TC-PRIMED, grouped by sensor / satellite pair ("sensat").
 
     Args:
         tc_primed_path (Path): Path to the root directory of TC-PRIMED.
-        exclude_years (list of int, optional): List of years to exclude from the search.
+        include_seasons (list of int, optional): List of seasons to include in the search.
 
     Returns:
         dict: A dictionary mapping each sensor / satellite pair to the list of corresponding overpass files.
     """
     # Retrieve the list of all overpass files
-    overpass_files, _ = list_tc_primed_storm_files(tc_primed_path, exclude_years)
+    overpass_files, _ = list_tc_primed_storm_files(tc_primed_path, include_seasons=include_seasons)
     # Group overpass files by sensor / satellite pair
     grouped_files = defaultdict(list)
     for file in chain(*overpass_files.values()):
@@ -111,12 +111,12 @@ def list_tc_primed_overpass_files_by_sensat(tc_primed_path, exclude_years=None):
     return grouped_files
 
 
-def list_tc_primed_storm_files(tc_primed_path, exclude_years=None):
+def list_tc_primed_storm_files(tc_primed_path, include_seasons=None):
     """Lists all source files for all storms in TC-PRIMED.
 
     Args:
         tc_primed_path (Path): Path to the root directory of TC-PRIMED.
-        exclude_years (list of int, optional): List of years to exclude from the search.
+        include_seasons (list of int, optional): List of seasons to include in the search.
 
     Returns:
         tuple: A pair of dictionaries (overpass_files, environment_files), where each dictionary maps
@@ -124,12 +124,10 @@ def list_tc_primed_storm_files(tc_primed_path, exclude_years=None):
             - overpass_files: Contains satellite overpass observation files
             - environment_files: Contains environmental condition files
     """
-    if exclude_years is None:
-        exclude_years = []
     # The raw dataset has the structure tc_primed/{year}/{basin}/{number}/{filename}.nc
     storm_files = {}
     for year in tc_primed_path.iterdir():
-        if int(year.stem) in exclude_years:
+        if include_seasons is not None and int(year.stem) not in include_seasons:
             continue
         for basin in year.iterdir():
             for number in basin.iterdir():
