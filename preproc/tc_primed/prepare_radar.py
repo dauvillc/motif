@@ -26,39 +26,45 @@ from motif.data.resampling import ResamplingError, regrid
 # Local imports
 from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat
 
+# Dict {sensat: (swath, [variables])} defining the radar variables to extract
 SENSAT_VARIABLES = {
-    "GMI_GPM": {
-        "KuKaGMI": ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"]
-    },
-    "TMI_TRMM": {
-        "KuTMI": ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"]
-    },
+    "GMI_GPM": (
+        "KuKaGMI",
+        ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"],
+    ),
+    "TMI_TRMM": (
+        "KuTMI",
+        ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"],
+    ),
 }
 
 
 def preprocess_radar(ds):
     """Preprocess radar data by standardizing dimensions and variables."""
     ds = ds.drop_vars(["ScanTime", "angle_bins", "x", "y"])
+    # Drop the attributes
+    ds = ds.drop_attrs()
     return ds
 
 
-def initialize_radar_metadata(sensat, swath, ifovs_path, dest_dir):
+def initialize_radar_metadata(sensat, ifovs_path, dest_dir):
     """Retrieves the list of all data and
     characteristic variables of a source; and writes the source metadata file.
     Args:
         sensat (str): Sensor / Satellite pair (e.g. "PR_TRMM")
-        swath (str): Swath name (e.g. "KuTMI").
         ifovs_path (Path): Path to the IFOVs YAML file.
         dest_dir (Path): Destination directory.
     Returns:
         bool: True if the metadata was successfully written, False otherwise.
     """
-    data_vars = SENSAT_VARIABLES[sensat][swath]
+    # Retrieve the swath and variables to extract for the given sensor/satellite
+    swath, data_vars = SENSAT_VARIABLES[sensat]
+
     # Variables that give information about the storm of the sample.
     storm_vars = ["storm_latitude", "storm_longitude", "intensity"]
     # Dict that contains the source's metadata.
     source_metadata = {
-        "source_name": "tc_primed_radar_" + sensat + "_" + swath,
+        "source_name": "tc_primed_radar_" + sensat,
         "source_type": "radar",
         "dim": 2,
         "data_vars": data_vars,
@@ -99,18 +105,15 @@ def initialize_radar_metadata(sensat, swath, ifovs_path, dest_dir):
 def process_overpass_file(
     file,
     sensat,
-    swath,
     dest_dir,
     rain_rate_criteria=0,
     regrid_to_res=None,
-    ifovs=None,
     check_older=None,
 ):
     """Processes a single overpass file to extract the radar data if it is available.
     Args:
         file (str): Path to the overpass file in netCDF4 format.
-        sensat (str): Sensor / Satellite pair (e.g. "PR_TRMM")
-        swath (str): Swath name (e.g. "KuTMI").
+        sensat (str): Sensor / Satellite pair ("TMI_TRMM" or "GMI_GPM").
         dest_dir (Path): Destination directory.
         rain_rate_criteria (list of pairs of float): List of pairs (number of pixels, min rain rate)
             such that only radar images with at least that many pixels above that rain rate
@@ -122,6 +125,9 @@ def process_overpass_file(
     Returns:
         dict or None: Sample metadata, or None if the sample is discarded.
     """
+    # Retrieve the swath and variables to extract for the given sensor/satellite
+    swath, data_vars = SENSAT_VARIABLES[sensat]
+
     with Dataset(file) as raw_sample:
         ds = raw_sample["radar_radiometer"]
         # Look at the radar data availability flag
@@ -132,8 +138,7 @@ def process_overpass_file(
         ds = xr.open_dataset(NetCDF4DataStore(ds[swath]), decode_times=False)
         ds = preprocess_radar(ds)
 
-        # Extract data variables
-        data_vars = SENSAT_VARIABLES[sensat][swath]
+        # Extract data variables and coordinates
         ds = ds[data_vars + ["latitude", "longitude"]]
         # If any variable is fully missing data, skip
         if any(ds[var].isnull().all() for var in data_vars):
@@ -164,7 +169,7 @@ def process_overpass_file(
         intensity = overpass_storm_metadata["intensity"][0].item()
 
         sample_metadata = {
-            "source_name": "tc_primed_radar_" + sensat + "_" + swath,
+            "source_name": "tc_primed_radar_" + sensat,
             "source_type": "radar",
             "sid": sid,
             "time": time,
@@ -218,7 +223,17 @@ def process_overpass_file(
 
         # Save processed data in the netCDF format
         ds = ds[data_vars + ["latitude", "longitude", "land_mask", "dist_to_center"]]
-        ds.to_netcdf(dest_file)
+        # Encoding: no compression, float32 for all variables.
+        encoding = {
+            var: {
+                "dtype": "float32",
+                "zlib": False,
+                "_FillValue": float("nan"),
+            }
+            for var in ds.data_vars
+        }
+        ds = ds.drop_encoding()
+        ds.to_netcdf(dest_file, encoding=encoding)
 
         return sample_metadata
 
@@ -237,87 +252,85 @@ def main(cfg):
     # Optional regridding resolution
     regridding_res = cfg.get("radar_regridding_resolution", None)
 
+    include_seasons = cfg.get("include_seasons", None)
     check_older = cfg.get("check_older", None)
     check_older = pd.to_timedelta(check_older) if check_older is not None else None
 
     # Retrieve all TC-PRIMED overpass files as a dict {sen_sat: <file_list>}
-    overpass_files = list_tc_primed_overpass_files_by_sensat(tc_primed_path)
+    overpass_files = list_tc_primed_overpass_files_by_sensat(tc_primed_path, include_seasons)
     overpass_files = {
         sensat: files for sensat, files in overpass_files.items() if sensat in SENSAT_VARIABLES
     }
 
     # Process each source. "sensat" stands for Sensor/Satellite (e.g. "PR_TRMM").
     for sensat in overpass_files:
-        for swath in SENSAT_VARIABLES[sensat].keys():
-            source_dest_dir = dest_path / f"tc_primed_radar_{sensat}_{swath}"
-            # Create destination directory
-            source_dest_dir.mkdir(parents=True, exist_ok=True)
+        source_dest_dir = dest_path / f"tc_primed_radar_{sensat}"
+        # Create destination directory
+        source_dest_dir.mkdir(parents=True, exist_ok=True)
 
-            if not initialize_radar_metadata(sensat, swath, ifovs_path, source_dest_dir):
-                # Remove directory if metadata could not be initialized
-                source_dest_dir.rmdir()
-                print(f"Skipping {sensat}")
-                continue
+        if not initialize_radar_metadata(sensat, ifovs_path, source_dest_dir):
+            # Remove directory if metadata could not be initialized
+            source_dest_dir.rmdir()
+            print(f"Skipping {sensat}")
+            continue
 
-            # Process all files, and keep count of discarded files and save the metadata of
-            # each sample.
-            discarded, samples_metadata = 0, []
-            num_workers = cfg.get("num_workers", 1)
-            chunksize = cfg.get("chunksize", 64)
+        # Process all files, and keep count of discarded files and save the metadata of
+        # each sample.
+        discarded, samples_metadata = 0, []
+        num_workers = cfg.get("num_workers", 1)
+        chunksize = cfg.get("chunksize", 64)
 
-            if num_workers <= 1:
-                for file in tqdm(overpass_files[sensat], desc=f"Processing {sensat} swath {swath}"):
-                    sample_metadata = process_overpass_file(
-                        file,
-                        sensat,
-                        swath,
-                        source_dest_dir,
-                        rain_rate_criteria,
-                        regridding_res,
-                        check_older,
-                    )
+        if num_workers <= 1:
+            for file in tqdm(overpass_files[sensat], desc=f"Processing {sensat}"):
+                sample_metadata = process_overpass_file(
+                    file,
+                    sensat,
+                    source_dest_dir,
+                    rain_rate_criteria,
+                    regridding_res,
+                    check_older,
+                )
+                if sample_metadata is None:
+                    discarded += 1
+                else:
+                    samples_metadata.append(sample_metadata)
+        else:
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                iterator = executor.map(
+                    process_overpass_file,
+                    overpass_files[sensat],
+                    repeat(sensat),
+                    repeat(source_dest_dir),
+                    repeat(rain_rate_criteria),
+                    repeat(regridding_res),
+                    repeat(check_older),
+                    chunksize=chunksize,
+                )
+                for sample_metadata in tqdm(
+                    iterator,
+                    desc=f"Processing {sensat}",
+                    total=len(overpass_files[sensat]),
+                ):
                     if sample_metadata is None:
                         discarded += 1
                     else:
                         samples_metadata.append(sample_metadata)
-            else:
-                with ProcessPoolExecutor(max_workers=num_workers) as executor:
-                    iterator = executor.map(
-                        process_overpass_file,
-                        overpass_files[sensat],
-                        repeat(sensat),
-                        repeat(swath),
-                        repeat(source_dest_dir),
-                        repeat(rain_rate_criteria),
-                        repeat(regridding_res),
-                        repeat(check_older),
-                        chunksize=chunksize,
-                    )
-                    for sample_metadata in tqdm(
-                        iterator,
-                        desc=f"Processing {sensat} swath {swath}",
-                        total=len(overpass_files[sensat]),
-                    ):
-                        if sample_metadata is None:
-                            discarded += 1
-                        else:
-                            samples_metadata.append(sample_metadata)
 
-            # If all files were discarded, remove all files inside the directory
-            # and remove the directory itself.
-            if discarded == len(overpass_files[sensat]):
-                for file in source_dest_dir.iterdir():
-                    file.unlink()
-                source_dest_dir.rmdir()
-                print(f"Found no valid samples for {sensat}/{swath}, removing directory.")
-            else:
-                if discarded > 0:
-                    percent = discarded / len(overpass_files[sensat]) * 100
-                    print(f"Discarded {discarded} samples for {sensat}/{swath} ({percent:.2f}%)")
-                # Concatenate the samples metadata into a DataFrame and save it
-                samples_metadata = pd.DataFrame(samples_metadata)
-                samples_metadata_path = source_dest_dir / "samples_metadata.csv"
-                samples_metadata.to_csv(samples_metadata_path, index=False)
+        # If all files were discarded, remove all files inside the directory
+        # and remove the directory itself.
+        if discarded == len(overpass_files[sensat]):
+            for file in source_dest_dir.iterdir():
+                file.unlink()
+            source_dest_dir.rmdir()
+            print(f"Found no valid samples for {sensat}, removing directory.")
+        else:
+            if discarded > 0:
+                percent = discarded / len(overpass_files[sensat]) * 100
+                print(f"Discarded {discarded} samples for {sensat} ({percent:.2f}%)")
+            # Concatenate the samples metadata into a DataFrame and save it
+            samples_metadata = pd.DataFrame(samples_metadata)
+            samples_metadata_path = source_dest_dir / "samples_metadata.csv"
+            samples_metadata.to_csv(samples_metadata_path, index=False)
 
 
 if __name__ == "__main__":

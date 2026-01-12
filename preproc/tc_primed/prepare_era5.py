@@ -184,6 +184,7 @@ def process_era5_file(file, dest_dir, patch_size, check_exist=False):
             # Save processed data in the netCDF format
             ds = ds[DATA_VARS + ["latitude", "longitude", "land_mask", "dist_to_center"]]
             ds = ds.drop_encoding()  # Drop the "unlimited_dims" encoding on the "time" dim.
+            ds = ds.drop_attrs()  # Drop global attributes that may cause issues.
             ds.to_netcdf(dest_file)
 
             samples_metadata.append(sample_metadata)
@@ -210,6 +211,7 @@ def main(cfg):
     """Main function to process IR data."""
     cfg = OmegaConf.to_container(cfg, resolve=True)
     patch_size = cfg.get("era5_patch_size", 201)  # Default 50 degrees at 0.25° resolution
+    include_seasons = cfg.get("include_seasons", None)
 
     # Setup paths
     tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
@@ -219,6 +221,7 @@ def main(cfg):
     # Get environmental files only
     sources, source_files, source_groups = list_tc_primed_sources(
         tc_primed_path,
+        include_years=include_seasons,
         source_type="environmental",
     )
     era5_files = source_files.get("era5", [])

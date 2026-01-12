@@ -239,14 +239,14 @@ def regrid_to_grid(ds, grid_lat, grid_lon, has_channel_dimension=False):
             raise ResamplingError(f"Error resampling variable {var}") from e
     # Rebuild the dataset
     if has_channel_dimension:
-        result = {var: (("lat", "lon", "channel"), resampled_vars[var]) for var in variables}
+        result = {var: ((dim_y, dim_x, "channel"), resampled_vars[var]) for var in variables}
     else:
-        result = {var: (("lat", "lon"), resampled_vars[var]) for var in variables}
+        result = {var: ((dim_y, dim_x), resampled_vars[var]) for var in variables}
 
     # Add the latitude and longitude variables as coordinates
     coords = {
-        "latitude": (["lat", "lon"], grid_lat),
-        "longitude": (["lat", "lon"], grid_lon),
+        "latitude": ((dim_y, dim_x), grid_lat),
+        "longitude": ((dim_y, dim_x), grid_lon),
     }
     # Rebuild the dataset
     result = xr.Dataset(result, coords=coords)

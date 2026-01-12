@@ -60,6 +60,8 @@ def preprocess_pmw(ds):
     ds = ds.drop_vars(["ScanTime", "angle_bins", "x", "y"])
     # Make sure latitude and longitude are coordinates
     ds = ds.set_coords(["latitude", "longitude"])
+    # Drop the attributes
+    ds = ds.drop_attrs()
     return ds
 
 
@@ -193,7 +195,7 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
         if any(ds89[var].isnull().all() for var in data_vars_89):
             return None
         # Standardize longitude values to [-180, 180]
-        ds89["longitude"] = (ds89["longitude"] + 180) % 360 - 180
+        ds89["longitude"].values = (ds89["longitude"].values + 180) % 360 - 180
 
         # OPTIONAL REGRIDDING TO REGULAR GRID
         if to_regular_grid:
@@ -286,14 +288,25 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
             storm_lon,
         )
         # Add the land mask and distance to center as new variables.
-        ds["land_mask"] = (("lat", "lon"), land_mask)
-        ds["dist_to_center"] = (("lat", "lon"), dist_to_center)
+        ds["land_mask"] = (("scan", "pixel"), land_mask)
+        ds["dist_to_center"] = (("scan", "pixel"), dist_to_center)
 
         # Save processed data in the netCDF format
         ds = ds[
             data_vars_89 + data_vars_37 + ["latitude", "longitude", "land_mask", "dist_to_center"]
         ]
-        ds.to_netcdf(dest_file)
+
+        # Encoding: no compression, float32 for all variables.
+        encoding = {
+            var: {
+                "dtype": "float32",
+                "zlib": False,
+                "_FillValue": float("nan"),
+            }
+            for var in ds.data_vars
+        }
+        ds = ds.drop_encoding()
+        ds.to_netcdf(dest_file, encoding=encoding)
 
         return sample_metadata
 
@@ -308,9 +321,10 @@ def main(cfg):
     ifovs_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed_ifovs.yaml"
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
 
+    # Retrieve configuration options
+    include_seasons = cfg.get("include_seasons", None)
     check_older = cfg.get("check_older", None)
     check_older = pd.to_timedelta(check_older) if check_older is not None else None
-
     use_regular_grid = cfg.get("use_regular_grid_pmw", False)
 
     # Read the IFOV values file
@@ -318,7 +332,7 @@ def main(cfg):
         ifovs = yaml.safe_load(f)
 
     # Retrieve all TC-PRIMED overpass files as a dict {sen_sat: <file_list>}
-    pmw_files = list_tc_primed_overpass_files_by_sensat(tc_primed_path)
+    pmw_files = list_tc_primed_overpass_files_by_sensat(tc_primed_path, include_seasons)
 
     # Process each PMW source. "sensat" stands for Sensor/Satellite (e.g. "AMSR2_GCOMW1").
     for sensat in pmw_files:
