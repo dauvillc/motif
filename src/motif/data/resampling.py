@@ -1,9 +1,9 @@
 """Implements functions to manipulate gridded data."""
 
 import logging
+import math
 import traceback
 import warnings
-from math import ceil
 
 import xarray as xr
 from numpy import nan as NA
@@ -88,16 +88,27 @@ def reverse_spatially(ds, dim_x, dim_y):
     return ds
 
 
-def regrid(ds, target_resolution):
+def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None, return_area=False):
     """Regrids the dataset ds to a regular grid with a given target resolution.
-    The maximum and minimum latitude and longitude values are used to define the
-    target area.
+    Uses an equiangular (Plate Carrée) projection.
 
     Args:
         ds (xarray.Dataset): Dataset to regrid. Must include the variables 'latitude'
             and 'longitude' and have exactly two dimensions.
-        target_resolution (tuple of float): The target resolution in degrees,
-            as a tuple (res_lat, res_lon).
+        target_resolution (float): The target resolution in km (converted to degrees
+            at the equator).
+        has_channel_dimension (bool): Whether the variables other than latitude
+            and longitude have a trailing channel dimension.
+        target_area (pyresample.AreaDefinition or None): If provided, the target area
+            definition to use for regridding. If None, a new area definition is created
+            based on the target resolution and the extent of the swath.
+        return_area (bool): Whether to return the target area definition along with
+            the regridded dataset.
+
+    Returns:
+        xr.Dataset: The regridded dataset.
+        (pyresample.AreaDefinition, optional): The target area definition,
+            returned if return_area is True.
     """
     # Get the dimensions from the latitude variable
     dims = list(ds.latitude.dims)
@@ -105,47 +116,35 @@ def regrid(ds, target_resolution):
         raise ValueError("Dataset must have exactly two dimensions")
     dim_y, dim_x = dims
 
-    # Rest of function remains the same but uses dim_y and dim_x
     lon, lat = check_and_wrap(ds.longitude.values, ds.latitude.values)
 
     swath = SwathDefinition(lons=lon, lats=lat)
     radius_of_influence = 100000  # 100 km
-    sizes = ds.sizes
-    size_y, size_x = sizes[dim_y], sizes[dim_x]
 
-    # Define the Mercator projection
-    central_lon = lon[size_y // 2, size_x // 2]
-    proj_id = "mercator"
-    proj_dict = {
-        "proj": "merc",
-        "lon_0": central_lon,
-        "R": EARTH_RADIUS,
-        "units": "m",
-    }
+    if target_area is None:
+        # Use an equiangular (Plate Carrée) projection
+        proj_dict = {
+            "proj": "longlat",
+            "a": EARTH_RADIUS,
+        }
 
-    # Compute the corner coordinates of the target area. For the longitude, we
-    # need to take into account the fact that the longitude can wrap around the
-    # globe (e.g. start at 179.5 and end at -179.5).
-    min_lat, max_lat = lat.min(), lat.max()
-    min_lon, max_lon = lon.min(), lon.max()
-    if ((min_lon < 0) and (max_lon > 0)) and (max_lon - min_lon > 180):
-        # If crossing the 180° meridian
-        min_lon = lon[lon > 0].min()
-        max_lon = lon[lon < 0].max()
-    # Round the min and max values to the nearest multiple of the target resolution
-    min_lat = ceil(min_lat / target_resolution[0]) * target_resolution[0]
-    max_lat = ceil(max_lat / target_resolution[0]) * target_resolution[0]
-    min_lon = ceil(min_lon / target_resolution[1]) * target_resolution[1]
-    max_lon = ceil(max_lon / target_resolution[1]) * target_resolution[1]
-    # Define the target area object for pyresample
-    with DisableLogger():  # Pyresample warns of rounded shapes, which is fine.
-        target_area = create_area_def(
-            proj_id,
-            proj_dict,
-            area_extent=[min_lon, min_lat, max_lon, max_lat],
-            resolution=target_resolution,
-            units="degrees",
-        )
+        # Convert target resolution from km to degrees
+        # We calculate the meters per degree based on the Earth radius provided
+        circumference = 2 * math.pi * EARTH_RADIUS
+        meters_per_degree = circumference / 360.0
+        res_degrees = (target_resolution * 1000) / meters_per_degree
+
+        with DisableLogger():
+            target_area_def = create_area_def(
+                area_id="dynamic_equiangular",
+                projection=proj_dict,
+                resolution=res_degrees,
+                units="degrees",
+                shape=None,
+            )
+
+        # Create the grid lat/lon values from the swath
+        target_area = target_area_def.freeze(swath, antimeridian_mode="modify_extents")
 
     # Retrieve the variables to regrid
     variables = [var for var in ds.variables if dim_y in ds[var].dims and dim_x in ds[var].dims]
@@ -168,8 +167,12 @@ def regrid(ds, target_resolution):
             traceback.print_tb(e.__traceback__)
             traceback.print_exc()
             raise ResamplingError(f"Error resampling variable {var}") from e
-    # Rebuild the datase
-    result = {var: (("lat", "lon"), resampled_vars[var]) for var in variables}
+
+    # Rebuild the dataset
+    if has_channel_dimension:
+        result = {var: (("lat", "lon", "channel"), resampled_vars[var]) for var in variables}
+    else:
+        result = {var: (("lat", "lon"), resampled_vars[var]) for var in variables}
 
     # Add the latitude and longitude variables as coordinates
     lons, lats = target_area.get_lonlats()
@@ -179,10 +182,12 @@ def regrid(ds, target_resolution):
     }
     # Rebuild the dataset
     result = xr.Dataset(result, coords=coords)
+    if return_area:
+        return result, target_area
     return result
 
 
-def regrid_to_grid(ds, grid_lat, grid_lon):
+def regrid_to_grid(ds, grid_lat, grid_lon, has_channel_dimension=False):
     """Regrids the dataset ds to a given target grid defined by its latitude
     and longitude arrays.
 
@@ -191,6 +196,11 @@ def regrid_to_grid(ds, grid_lat, grid_lon):
             and 'longitude' and have exactly two dimensions.
         grid_lat (numpy.ndarray): The latitude grid, of shape (H, W).
         grid_lon (numpy.ndarray): The longitude grid, of shape (H, W).
+        has_channel_dimension (bool): Whether the variables other than latitude
+            and longitude have a trailing channel dimension.
+
+    Returns:
+        xr.Dataset: The regridded dataset.
     """
     # Get the dimensions from the latitude variable
     dims = list(ds.latitude.dims)
@@ -227,13 +237,16 @@ def regrid_to_grid(ds, grid_lat, grid_lon):
             traceback.print_tb(e.__traceback__)
             traceback.print_exc()
             raise ResamplingError(f"Error resampling variable {var}") from e
-    # Rebuild the datase
-    result = {var: ((dim_y, dim_x), resampled_vars[var]) for var in variables}
+    # Rebuild the dataset
+    if has_channel_dimension:
+        result = {var: (("lat", "lon", "channel"), resampled_vars[var]) for var in variables}
+    else:
+        result = {var: (("lat", "lon"), resampled_vars[var]) for var in variables}
 
     # Add the latitude and longitude variables as coordinates
     coords = {
-        "latitude": ([dim_y, dim_x], grid_lat),
-        "longitude": ([dim_y, dim_x], grid_lon),
+        "latitude": (["lat", "lon"], grid_lat),
+        "longitude": (["lat", "lon"], grid_lon),
     }
     # Rebuild the dataset
     result = xr.Dataset(result, coords=coords)

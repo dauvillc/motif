@@ -7,9 +7,10 @@ Bulk-download files from the NOAA TC-PRIMED public S3 bucket.
 
 Examples
 ========
-# 1)  All 2015 North-Atlantic storms (year index 28: 1987 + 28 = 2015)
+# 1)  All 2015 Atlantic storms (year index 28: 1987 + 28 = 2015)
 python download_tcprimed.py \
     --year 28 \
+    --basin AL \
     --dest /scratch/$USER/tcprimed
 
 # 2)  Everything in v01r01/final (≈1.6 TB – be sure you really want it!)
@@ -17,9 +18,11 @@ python download_tcprimed.py \
     --dest /scratch/$USER/tcprimed \
     --workers 32
 """
+
 import argparse
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import boto3
 from botocore import UNSIGNED
@@ -68,21 +71,30 @@ if __name__ == "__main__":
         help="Year index to download (0=1987, 1=1988, etc.). If not provided, downloads all data.",
     )
     parser.add_argument(
-        "--dest", required=True, help="Root destination directory for the dataset."
+        "--basin",
+        type=str,
+        choices=["AL", "EP", "CP", "WP", "SH", "IO"],
+        help="Basin code to filter by (e.g., 'AL' for Atlantic). Requires --year to be set.",
     )
+    parser.add_argument("--dest", required=True, help="Root destination directory for the dataset.")
     parser.add_argument(
         "--workers", type=int, default=8, help="Parallel download threads (default: 8)."
     )
     args = parser.parse_args()
 
-    # Construct prefix based on year argument
+    # Construct prefix based on arguments
     if args.year is not None:
         absolute_year = 1987 + args.year
         prefix = f"v01r01/final/{absolute_year}/"
-        dest_root = os.path.join(os.path.abspath(args.dest), str(absolute_year))
+        dest_root = Path(args.dest) / str(absolute_year)
     else:
         prefix = "v01r01/final/"
-        dest_root = os.path.abspath(args.dest)
+        dest_root = Path(args.dest)
+    if args.basin is not None:
+        if args.year is None:
+            parser.error("--basin requires --year to be set.")
+        prefix = os.path.join(prefix, args.basin) + "/"
+        dest_root = dest_root / args.basin
     print(f"Downloading from s3://{BUCKET_NAME}/{prefix} to {dest_root}/")
 
     # Anonymous (unsigned) S3 client
@@ -92,7 +104,7 @@ if __name__ == "__main__":
     objects = list(list_keys(prefix))
     total_size = sum(size for _, size in objects)
 
-    print(f"Found {len(objects):,} files – {total_size/1e9:,.2f} GB.")
+    print(f"Found {len(objects):,} files – {total_size / 1e9:,.2f} GB.")
 
     # Multi-threaded download with progress bar showing bytes
     with tqdm(

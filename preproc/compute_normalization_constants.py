@@ -164,7 +164,9 @@ def main(cfg):
                         max(min_max[charac_var]["max"], np.max(data))
                     )
             # Save the min and max for each charac var in that source's constants directory.
-            with open(constants_dir / src / "charac_vars_min_max.json", "w") as f:
+            dir = constants_dir / src
+            dir.mkdir(parents=True, exist_ok=True)
+            with open(dir / "charac_vars_min_max.json", "w") as f:
                 json.dump(min_max, f)
 
 

@@ -1,11 +1,10 @@
-"""To be used after regrid.py. Splits the data into training, validation, and test sets."""
+"""Splits the data into training, validation, and test sets."""
 
 from pathlib import Path
 
 import hydra
 import pandas as pd
 from omegaconf import OmegaConf
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 
@@ -19,13 +18,6 @@ def main(cfg):
     train_file = preprocessed_dir / "train.csv"
     val_file = preprocessed_dir / "val.csv"
     test_file = preprocessed_dir / "test.csv"
-    # Cfg option to reuse existing splits if they exist:
-    # if an SID is alreay in one of the splits, we won't change it
-    # (allows to add new data without changing existing splits).
-    reuse_existing = cfg["reuse_existing_splits"]
-    reuse_existing = reuse_existing and (
-        train_file.exists() and val_file.exists() and test_file.exists()
-    )
 
     # Each subdirectory in the regridded directory corresponds to a source, and contains
     # a file "samples_metadata.csv". We'll load all of these files and assemble them
@@ -44,7 +36,8 @@ def main(cfg):
     metadata = metadata.sort_values(["sid", "source_name", "time"])
     delta = pd.Timedelta(minutes=cfg["min_time_between_same_source"])
 
-    def keep_group(g):
+    def keep_one_every_delta(g):
+        """Keep only one sample every delta time in the group g."""
         kept = []
         last_kept_time = pd.Timestamp.min
         for idx, t in zip(g.index, g["time"]):
@@ -55,7 +48,7 @@ def main(cfg):
 
     metadata = (
         metadata.groupby(["sid", "source_name"], group_keys=False)
-        .apply(keep_group)
+        .apply(keep_one_every_delta)
         .reset_index(drop=True)
     )
 
@@ -65,55 +58,20 @@ def main(cfg):
     metadata = metadata.sort_values(["sid", "time", "source_name"], ascending=[True, False, True])
     metadata = metadata.reset_index(drop=True)
 
-    # Load the fraction of samples to use for validation and test sets from the config
-    train_val_test_fraction = cfg["train_val_test_fraction"]
-    if sum(train_val_test_fraction) != 1:
-        raise ValueError("The split fractions must sum to 1")
-    # Load the random seed from the config
-    seed = cfg["splitting_seed"]
-    # the 'sid' column is the storm ID. We'll use this to split the data: samples
-    # from the same storm should be in the same split, to avoid data leakage.
-    sids = metadata["sid"].unique()
+    # Load the seasons to use for the validation and test sets
+    val_seasons, test_seasons = cfg["val_seasons"], cfg["test_seasons"]
+    # We'll use the SID to determine the season of each sample. The season is the
+    # first four characters of the SID.
+    metadata["season"] = metadata["sid"].str[:4].astype(int)
+    # Split the data into training, validation, and test sets based on the seasons.
+    val_mask = metadata["season"].isin(val_seasons)
+    test_mask = metadata["season"].isin(test_seasons)
+    train_mask = ~(val_mask | test_mask)
+    train = metadata[train_mask]
+    val = metadata[val_mask]
+    test = metadata[test_mask]
 
-    # Remove sids that are already in one of the splits if reuse_existing is True
-    if reuse_existing:
-        print("Reusing existing splits")
-        existing_train = pd.read_csv(train_file)
-        existing_val = pd.read_csv(val_file)
-        existing_test = pd.read_csv(test_file)
-        existing_sids = (
-            set(existing_train["sid"].unique())
-            .union(set(existing_val["sid"].unique()))
-            .union(set(existing_test["sid"].unique()))
-        )
-        print(f"Number of pre-existing storms in splits: {len(existing_sids)}")
-        sids = [sid for sid in sids if sid not in existing_sids]
-        print(f"Number of new storms to split: {len(sids)}")
-
-    # Split the sids into training, validation, and test sets
-    print("Splitting data")
-    if len(sids) == 0:
-        # No new sids to split
-        train_sids, val_sids, test_sids = [], [], []
-    else:
-        train_frac, val_frac, test_frac = train_val_test_fraction
-        train_val_frac = train_frac + val_frac
-        train_vals_sids, test_sids = train_test_split(sids, test_size=test_frac, random_state=seed)
-        train_sids, val_sids = train_test_split(
-            train_vals_sids, test_size=val_frac / train_val_frac, random_state=seed
-        )
-
-    if reuse_existing:
-        # Add the existing sids to the appropriate splits
-        train_sids = list(set(train_sids).union(set(existing_train["sid"].unique())))
-        val_sids = list(set(val_sids).union(set(existing_val["sid"].unique())))
-        test_sids = list(set(test_sids).union(set(existing_test["sid"].unique())))
-
-    # Place the samples into the appropriate split based on the storm ID
-    train = metadata[metadata["sid"].isin(train_sids)]
-    val = metadata[metadata["sid"].isin(val_sids)]
-    test = metadata[metadata["sid"].isin(test_sids)]
-
+    # Sort and reset indices (cleaner for later inspection)
     train = train.sort_values(["sid", "time", "source_name"], ascending=[True, False, True])
     val = val.sort_values(["sid", "time", "source_name"], ascending=[True, False, True])
     test = test.sort_values(["sid", "time", "source_name"], ascending=[True, False, True])
