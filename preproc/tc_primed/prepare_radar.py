@@ -15,22 +15,20 @@ import pandas as pd
 import xarray as xr
 import yaml
 from global_land_mask import globe
-from motif.data.grid_functions import (
-    ResamplingError,
-    grid_distance_to_point,
-    regrid,
-)
 from netCDF4 import Dataset
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from xarray.backends import NetCDF4DataStore
+
+from motif.data.grid_functions import grid_distance_to_point
+from motif.data.resampling import ResamplingError, regrid
 
 # Local imports
 from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat
 
 SENSAT_VARIABLES = {
     "GMI_GPM": {
-        "KuGMI": ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"]
+        "KuKaGMI": ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"]
     },
     "TMI_TRMM": {
         "KuTMI": ["nearSurfPrecipTotRate", "nearSurfPrecipTotRateSigma", "mainprecipitationType"]
@@ -99,7 +97,14 @@ def initialize_radar_metadata(sensat, swath, ifovs_path, dest_dir):
 
 
 def process_overpass_file(
-    file, sensat, swath, dest_dir, rain_rate_criteria, regridding_res, check_older=None
+    file,
+    sensat,
+    swath,
+    dest_dir,
+    rain_rate_criteria=0,
+    regrid_to_res=None,
+    ifovs=None,
+    check_older=None,
 ):
     """Processes a single overpass file to extract the radar data if it is available.
     Args:
@@ -110,7 +115,8 @@ def process_overpass_file(
         rain_rate_criteria (list of pairs of float): List of pairs (number of pixels, min rain rate)
             such that only radar images with at least that many pixels above that rain rate
             will be kept. Including multiple pairs will act as a logical OR.
-        regridding_res (float): Resolution of the target grid, in degrees.
+        regrid_to_res (float or None): if a float r, regrids the data to a regular lat/lon grid
+            with resolution r (in degrees). If None, no regridding is performed.
         check_older (timedelta or None): if a timedelta dt, checks if there is a pre-existing
             file younger than dt. If so, skips processing.
     Returns:
@@ -181,33 +187,34 @@ def process_overpass_file(
         # Standardize longitude values to [-180, 180]
         ds["longitude"] = (ds["longitude"] + 180) % 360 - 180
 
-        # Regrid from satellite geometry to a regular grid
-        try:
-            # Regrid from satellite geometry to a regular lat/lon grid
-            ds = regrid(ds, regridding_res)
-            # Check if any variable is fully null after regridding. If so, skip the sample.
-            for variable in ds.variables:
-                if ds[variable].isnull().all():
-                    warnings.warn(f"Variable {variable} is null for sample {file}.")
-                    return None
-            # Compute the land-sea mask
-            land_mask = globe.is_land(
-                ds["latitude"].values,
-                ds["longitude"].values,
-            )
-            # Compute the distance between each grid point and the center of the storm.
-            dist_to_center = grid_distance_to_point(
-                ds["latitude"].values,
-                ds["longitude"].values,
-                storm_lat,
-                storm_lon,
-            )
-            # Add the land mask and distance to center as new variables.
-            ds["land_mask"] = (("lat", "lon"), land_mask)
-            ds["dist_to_center"] = (("lat", "lon"), dist_to_center)
+        if regrid_to_res is not None:
+            # Regrid from satellite geometry to a regular grid
+            try:
+                # Regrid from satellite geometry to a regular lat/lon grid
+                ds = regrid(ds, regrid_to_res)
+                # Check if any variable is fully null after regridding. If so, skip the sample.
+                for variable in ds.variables:
+                    if ds[variable].isnull().all():
+                        warnings.warn(f"Variable {variable} is null for sample {file}.")
+                        return None
+            except ResamplingError as e:
+                raise RuntimeError(f"Resampling error for sample {file}: {e}")
 
-        except ResamplingError as e:
-            raise RuntimeError(f"Resampling error for sample {file}: {e}")
+        # Compute the land-sea mask
+        land_mask = globe.is_land(
+            ds["latitude"].values,
+            ds["longitude"].values,
+        )
+        # Compute the distance between each grid point and the center of the storm.
+        dist_to_center = grid_distance_to_point(
+            ds["latitude"].values,
+            ds["longitude"].values,
+            storm_lat,
+            storm_lon,
+        )
+        # Add the land mask and distance to center as new variables.
+        ds["land_mask"] = (("lat", "lon"), land_mask)
+        ds["dist_to_center"] = (("lat", "lon"), dist_to_center)
 
         # Save processed data in the netCDF format
         ds = ds[data_vars + ["latitude", "longitude", "land_mask", "dist_to_center"]]
@@ -225,10 +232,10 @@ def main(cfg):
     tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
     ifovs_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed_ifovs.yaml"
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
-    # Resolution of the target grid, in degrees
-    regridding_res = cfg["regridding_resolution_radar"]
     # Rain rate criteria for radar pre-selection
     rain_rate_criteria = cfg["radar_rain_rate_criteria"]
+    # Optional regridding resolution
+    regridding_res = cfg.get("radar_regridding_resolution", None)
 
     check_older = cfg.get("check_older", None)
     check_older = pd.to_timedelta(check_older) if check_older is not None else None
