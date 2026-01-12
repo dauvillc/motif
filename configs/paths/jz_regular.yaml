@@ -10,3 +10,8 @@ validation: ${oc.env:SCRATCH}/data/motif/validation
 predictions: ${oc.env:SCRATCH}/data/motif/predictions
 results: ${oc.env:SCRATCH}/data/motif/results
 
+gpm_tle_dir: ${.raw_datasets}/gpm/tle
+gpm_coincidences_dir: ${oc.env:SCRATCH}/data/motif/processed/gpm/coincidences
+gpm_pmw_download_dir: ${oc.env:SCRATCH}/data/motif/processed/gpm/pmw_data
+gpm_granules_dir: ${oc.env:SCRATCH}/data/motif/processed/gpm/granules
+

@@ -12,6 +12,7 @@ wheels/
 # IDE
 .vscode/
 .idea/
+.github/
 
 # Output directories
 outputs/

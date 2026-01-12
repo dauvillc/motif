@@ -10,3 +10,11 @@ validation: ${oc.env:SCRATCH}/data/motif/validation
 predictions: ${oc.env:SCRATCH}/data/motif/predictions
 results: ${oc.env:SCRATCH}/data/motif/results
 
+gpm_tle_dir: ${.raw_datasets}/gpm/tle
+gpm_pmw_download_dir: ${.raw_datasets}/gpm/pmw_data
+gpm_granules_dir: ${oc.env:SCRATCH}/data/motif/raw/gpm/granules/
+gpm_urls_dir: ${oc.env:SCRATCH}/data/motif/raw/gpm/urls/
+gpm_cache_dir: /home/cdauvill/scratch/data/motif/raw/gpm/cache/
+gpm_raw_coincidences_csv: ${oc.env:SCRATCH}/data/motif/raw/gpm/raw_coincidences.csv
+gpm_coincidences_csv: ${oc.env:SCRATCH}/data/motif/raw/gpm/coincidences.csv
+

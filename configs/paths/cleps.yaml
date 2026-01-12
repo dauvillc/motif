@@ -12,3 +12,10 @@ validation: "/home/cdauvill/scratch/data/motif/validation"
 predictions: "/home/cdauvill/scratch/data/motif/predictions"
 # Results (including visualisation of predictions and targets)
 results: "/home/cdauvill/scratch/data/motif/results"
+
+gpm_tle_dir: "/home/cdauvill/scratch/data/motif/raw/gpm/tle"
+gpm_granules_dir: "/home/cdauvill/scratch/data/motif/raw/gpm/granules/"
+gpm_urls_dir: "/home/cdauvill/scratch/data/motif/raw/gpm/pmw_urls/"
+gpm_cache_dir: "/home/cdauvill/scratch/data/motif/raw/gpm/cache/"
+gpm_raw_coincidences_csv: "/home/cdauvill/scratch/data/motif/raw/gpm/raw_coincidences.csv"
+gpm_coincidences_csv: "/home/cdauvill/scratch/data/motif/raw/gpm/coincidences.csv"
