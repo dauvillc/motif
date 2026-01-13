@@ -14,7 +14,6 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from motif.data.collate_fn import multi_source_collate_fn
-from motif.utils.callbacks import UnusedParameterChecker
 from motif.utils.cfg_utils import get_random_code
 from motif.utils.checkpoints import load_experiment_cfg_from_checkpoint
 
@@ -144,13 +143,7 @@ class TrainJob(submitit.helpers.Checkpointable):
 
         lr_monitor = LearningRateMonitor()
         model_summary = ModelSummary(max_depth=4)
-        callbacks = [
-            epoch_checkpoint_callback,
-            time_checkpoint_callback,
-            lr_monitor,
-            model_summary,
-            UnusedParameterChecker(),
-        ]
+        callbacks = [epoch_checkpoint_callback, time_checkpoint_callback, lr_monitor, model_summary]
 
         # Create the trainer
         trainer = pl.Trainer(
