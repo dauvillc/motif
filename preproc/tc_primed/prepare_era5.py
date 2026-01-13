@@ -221,7 +221,7 @@ def main(cfg):
     # Get environmental files only
     sources, source_files, source_groups = list_tc_primed_sources(
         tc_primed_path,
-        include_years=include_seasons,
+        include_seasons=include_seasons,
         source_type="environmental",
     )
     era5_files = source_files.get("era5", [])
