@@ -5,6 +5,7 @@ import math
 import traceback
 import warnings
 
+import numpy as np
 import xarray as xr
 from numpy import nan as NA
 from pyresample import SwathDefinition
@@ -118,6 +119,23 @@ def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None,
 
     lon, lat = check_and_wrap(ds.longitude.values, ds.latitude.values)
 
+    # Resampling can provoke errors for cases where the longitudes
+    # cross the antimeridian. We have however the advantage that
+    # we can assume that the longitudes here span over strictly less than 180°.
+    # Therefore, if there are both negative and positive longitudes, they
+    # either cross the 0° meridian or the 180° meridian.
+    # - If they cross the 0° meridian, nothing to do it'll be handled correctly.
+    # - If they cross the 180° meridian, we'll shift the longitudes to be all positive,
+    #   then resample, then shift back.
+    lons_were_shifted = False
+    if np.any(lon < 0) and np.any(lon > 0):
+        # Check which meridian is being crossed
+        lon_span = lon.max() - lon.min()
+        if lon_span > 180:
+            # Crossing the 180° meridian
+            lon = np.where(lon < 0, lon + 360, lon) - 180
+            lons_were_shifted = True
+
     swath = SwathDefinition(lons=lon, lats=lat)
     radius_of_influence = 100000  # 100 km
 
@@ -176,6 +194,11 @@ def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None,
 
     # Add the latitude and longitude variables as coordinates
     lons, lats = target_area.get_lonlats()
+    # Shift back longitudes if they were shifted
+    if lons_were_shifted:
+        lons += 180.0
+        lons = np.where(lons > 180.0, lons - 360.0, lons)
+
     coords = {
         "latitude": (["lat", "lon"], lats),
         "longitude": (["lat", "lon"], lons),
