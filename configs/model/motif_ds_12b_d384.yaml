@@ -9,13 +9,13 @@ backbone:
   cond_dim: ${lightning_module.cond_dim}
   n_blocks: 12
   dropout: ${model.dropout}
+  downsample_input: true
   att_inner_ratio: 1.0
   cross_att_inner_ratio_v: 1.0
   mlp_inner_ratio: 2.0
-  num_heads: 8
+  num_heads: 12
   cross_att_window_size: 4
   iwsa_window_size: 8
-  downsample_input: true
 
 output_resnet_channels: null
 output_resnet_blocks: null
