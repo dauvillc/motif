@@ -9,7 +9,6 @@ defaults:
 dataset:
   train:
     dt_max: 6
-    min_available_sources: 2
     num_workers: 0
   val:
     num_workers: 0
