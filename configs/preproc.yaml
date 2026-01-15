@@ -4,15 +4,12 @@ defaults:
 
 # Whether to use a regular grid for PMW data
 use_regular_grid_pmw: false
-# Target resolution to which the PMW images will be regridded, in degrees.
-# Give a list [longitude_res, latitude_res]
-pmw_regridding_resolution: [0.15, 0.15]
 # Target resolution for radar data, in km.
 radar_regridding_resolution: 5.0
 # Radar pre-selection: list of pairs (number of pixels, min rain rate) such
 # that only radar images with at least that many pixels above that rain rate
 # will be kept. Including multiple pairs will act as a logical OR.
-radar_rain_rate_criteria: [[100, 10], [10, 100]]  # Values taken from Viltard et. al. 2024
+radar_rain_rate_criteria: [[1, 1]]  # At least 1 pixel with rain rate >= 1 mm/h
 
 # For ERA5 0.25° patches, size of the square patches in pixels
 era5_patch_size: 201

@@ -2,6 +2,7 @@
 raw_datasets: "/home/cdauvill/scratch/data/motif/raw/"
 # Path to where the preprocessed dataset will be saved
 preprocessed_dataset: "/home/cdauvill/scratch/data/motif/preprocessed_pmw_concat/"
+preprocessed_dataset_regular: "/home/cdauvill/scratch/data/motif/preprocessed_pmw_concat_regular/"
 # Checkpoints directory
 checkpoints: "/home/cdauvill/scratch/checkpoints/"
 # Weights and Biases logs

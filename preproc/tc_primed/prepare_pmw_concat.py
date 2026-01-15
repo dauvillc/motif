@@ -12,7 +12,6 @@ from itertools import repeat
 from pathlib import Path
 
 import hydra
-import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
@@ -23,7 +22,7 @@ from tqdm import tqdm
 from xarray.backends import NetCDF4DataStore
 
 from motif.data.grid_functions import grid_distance_to_point
-from motif.data.resampling import ResamplingError, regrid_to_grid
+from motif.data.resampling import ResamplingError, regrid, regrid_to_grid
 
 # Local imports
 from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat
@@ -209,32 +208,12 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
                 # We'll just take the IFOVs of the first variable
                 first_var = data_vars_89[0]
                 ifovs_89 = ifovs_89[first_var]
-            ifov_nadir_along, ifov_nadir_across = ifovs_89[0], ifovs_89[1]
-            # Estimate regridding resolution as the max IFOV
-            regridding_res_km = max(ifov_nadir_across, ifov_nadir_along)
+            # Estimate regridding resolution as the min IFOV (in km)
+            regridding_res = min(ifovs_89)
 
-            # Convert km to degrees for latitude (constant)
-            regridding_res_lat = regridding_res_km / 111.32
-
-            # Create latitude grid first
-            lat89 = ds89["latitude"].values
-            min_lat, max_lat = lat89.min(), lat89.max()
-            new_lats = np.arange(min_lat, max_lat, regridding_res_lat)
-
-            # For longitude, compute resolution at each latitude
-            lon89 = ds89["longitude"].values
-            min_lon, max_lon = lon89.min(), lon89.max()
-
-            # Use latitude-dependent longitude spacing
-            # Calculate resolution at the center of the latitude range for a uniform grid
-            center_lat = (min_lat + max_lat) / 2
-            regridding_res_lon = regridding_res_km / (111.32 * np.cos(np.radians(center_lat)))
-            new_lons = np.arange(min_lon, max_lon, regridding_res_lon)
-            new_lons = (new_lons + 180) % 360 - 180  # Standardize to [-180, 180]
-            grid_lons, grid_lats = np.meshgrid(new_lons, new_lats)
             # Regrid the 89GHz data to the regular grid
             try:
-                ds89 = regrid_to_grid(ds89, grid_lats, grid_lons)
+                ds89, target_area = regrid(ds89, regridding_res, return_area=True)
                 # Check if any variable is fully null after regridding
                 for variable in ds89.variables:
                     if ds89[variable].isnull().all():
@@ -255,7 +234,10 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
         ds37["longitude"] = (ds37["longitude"] + 180) % 360 - 180
         # Regrid to the 89GHz grid
         try:
-            ds37 = regrid_to_grid(ds37, ds89["latitude"].values, ds89["longitude"].values)
+            if to_regular_grid:
+                ds37 = regrid(ds37, regridding_res, target_area=target_area)
+            else:
+                ds37 = regrid_to_grid(ds37, ds89["latitude"].values, ds89["longitude"].values)
             # Check if any variable is fully null after regridding. If so, skip the sample.
             for variable in ds37.variables:
                 if ds37[variable].isnull().all():
@@ -326,6 +308,9 @@ def main(cfg):
     check_older = cfg.get("check_older", None)
     check_older = pd.to_timedelta(check_older) if check_older is not None else None
     use_regular_grid = cfg.get("use_regular_grid_pmw", False)
+    if use_regular_grid:
+        # If using regular grid, change destination path to avoid overwriting
+        dest_path = Path(cfg["paths"]["preprocessed_dataset_regular"]) / "prepared"
 
     # Read the IFOV values file
     with open(ifovs_path, "r") as f:

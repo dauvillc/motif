@@ -203,7 +203,8 @@ def process_overpass_file(
                         warnings.warn(f"Variable {variable} is null for sample {file}.")
                         return None
             except ResamplingError as e:
-                raise RuntimeError(f"Resampling error for sample {file}: {e}")
+                warnings.warn(f"Regridding failed for sample {file}: {e}")
+                return None
 
         # Compute the land-sea mask
         land_mask = globe.is_land(
