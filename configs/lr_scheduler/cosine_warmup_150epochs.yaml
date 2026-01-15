@@ -1,7 +1,7 @@
 # Keyword arguments of CosineAnnealingWarmupRestarts
-warmup_steps: 2
+warmup_steps: 1
 first_cycle_steps: 150
 cycle_mult: 1.0
-max_lr: 0.0003
-min_lr: 1e-07
+max_lr: 3e-4
+min_lr: 1e-6
 gamma: 1.0
