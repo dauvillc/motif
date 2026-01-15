@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - override /sources: pmw_37_89
+  - override /sources: pmw_radar
   - override /lightning_module: flow_matching
   - override /lr_scheduler: cosine_warmup_100epochs
   - override /metrics: none
@@ -9,11 +9,11 @@ defaults:
 lightning_module:
   use_det_model_from_run: null
   mask_only_sources:  # Only mask these sources when applying random source masking
-    - tc_primed_pmw_GMI_GPM
+    - tc_primed_radar_GMI_GPM
 
 wandb:
-  name: diff_pmw_gpm
-  group: diff_pmw_gpm
+  name: diff_pmw_radar
+  group: diff_pmw_radar
 
 dataset:
   train:
@@ -35,7 +35,7 @@ dataset:
         availability: [1, 2]
       gmi:
         sources:
-          - tc_primed_pmw_GMI_GPM
+          - tc_primed_radar_GMI_GPM
         availability: [1, null]
 trainer:
-  strategy: ddp
+  strategy: ddp_find_unused_parameters_true

@@ -103,13 +103,10 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         included_variables_dict,
         dt_max=24,
         dt_max_norm=None,
-        min_available_sources=0,
-        source_types_min_avail={},
-        source_types_max_avail={},
+        groups_availability={},
         select_most_recent=False,
         min_ref_time_delta=0,
         num_workers=0,
-        must_include_groups=[],
         forecasting_lead_time=None,
         forecasting_sources=None,
         min_tc_intensity=None,
@@ -145,24 +142,30 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 in hours.
             dt_max_norm (int): If not None, the value to use for normalizing the time delta.
                 If None, will use dt_max.
-            min_available_sources (int): The minimum number of sources that must be available
-                for a sample to be included in the dataset. Does NOT include the forecast source
-                if it is enabled.
-            source_types_min_avail (dict of str to int): A dictionary D = {src_type: availability}
-                such that if D[source_type] is the minimum number of sources of type source_type
-                that must be available for a sample to be included in the dataset.
-            source_types_max_avail (dict of str to int): A dictionary D = {src_type: availability}
-                such that for a source type T, at most D[T] sources of that type can be included
-                in a sample.
+            groups_availability (Dict of str to dict): Dict defining groups of sources.
+                For each group, a minimum and a maximum number of sources from that group
+                can be set, which will be used to filter the samples.
+                The root keys are group names, and serve no purpose beyond clarity.
+                The structure is as follows:
+                {
+                    group_name_1: {
+                        sources: [list of source names],
+                        availability: (min_available, max_available)
+                    },
+                    group_name_2: ...
+                }
+                For example, {"g1": {sources: ["S1", "S2"], availability: (1, 3)}} means that
+                from the group g1 ["S1", "S2"] must be available in each sample, and at most
+                3 sources from that group will be included in each sample.
+                Note 1: The maximum number can be set to None to have no limit.
+                Note 2: Instead of writing the full source names, one can also use source types
+                    to include all sources of a given type.
             select_most_recent (bool): If True, prioritize the most recent observations within
                 a source when there are too many available sources of that type. Otherwise,
                 prioritize randomly.
             min_ref_time_delta (int): The minimum time delta between two reference times
                 of the same storm (ie between two samples of the same storm).
             num_workers (int): If > 1, number of workers to use for parallel loading of the data.
-            must_include_groups (list of list of str): List of groups of sources
-                such that at least one source from each group must be available for a sample
-                to be included in the dataset.
             forecasting_lead_time (int): If not None, the lead time to use for forecasting.
                 Must be used in conjunction with forecasting_sources. If enabled, the reference
                 source will always be one of the forecast source.
@@ -178,7 +181,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 coordinates will be masked (set to zeros).
             data_augmentation (None or MultiSourceDataAugmentation): If not None, instance
                 of MultiSourceDataAugmentation to apply to the data.
-            limit_samples (int or float or None): If not None, limits the number of samples in the dataset.
+            limit_samples (int or float or None): If not None, limits the number of samples in
+                the dataset.
                 If an integer, will keep at most limit_samples samples.
                 If a float between 0 and 1, will keep that fraction of the samples.
             seed (int): The seed to use for the random number generator.
@@ -188,7 +192,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         self.constants_dir = self.dataset_dir / "constants"
         self.processed_dir = self.dataset_dir / "prepared"
         self.split = split
-        self.source_types_max_avail = source_types_max_avail
+        self.groups_availability = groups_availability
         self.min_ref_time_delta = min_ref_time_delta
         self.select_most_recent = select_most_recent
         self.mask_spatial_coords = mask_spatial_coords
@@ -261,8 +265,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
         # ========================================================================================
         # BUILDING THE REFERENCE DATAFRAME
-        # We'll now filter the samples to only keep the ones where at least min_available_sources
-        # sources are available.
         # - We'll compute a dataframe D of shape (n_samples, n_sources) such that
         # D[i, s] = 1 if source i is available for sample s, and 0 otherwise.
         print(f"{split}: Computing sources availability...")
@@ -273,47 +275,43 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # - self.df contains the metadata for all elements from all sources,
         # - self.reference_df is a subset of self.df containing every (sid, time) pair
         #   that defines a sample which matches the availability criteria.
-        # There are two such criteria to check: the overall number of available sources
-        # and the number of available sources of each type.
         # The criteria will fill a list of boolean masks, which will be combined
         # with a logical AND to filter the dataframe.
         masks = []
-        # First: only keep the samples where at least min_available_sources sources are available
+        # We'll begin by counting which sources are available for each sample.
         available_sources_count = available_sources.sum(axis=1)
-        masks.append(available_sources_count >= min_available_sources)
-        self.min_available_sources = min_available_sources
-        # Second: check the availability of the sources of each type specifically.
-        # If a source type is in the source types of self.sources but was not specified in the
-        # source_types_min_avail dict, we'll interpret it as a minimum availability of 0.
-        self.source_types_min_avail = {
-            source_type: source_types_min_avail.get(source_type, 0)
-            for source_type in self.source_types
-        }
-        # For each source type, compute the number of available sources in each sample
-        source_types_availability = {}  # {source_type: n available sources of this type}
-        for source_type, required_avail in self.source_types_min_avail.items():
-            # Get the sources of the given type
-            sources_of_type = [
-                source.name
-                for source in self.sources
-                if source.type == source_type and source.name in available_sources.columns
-            ]
-            # Compute the number of available sources of this type
-            st_avail_count = available_sources[sources_of_type].sum(axis=1)
-            # Compute the mask for the samples that have at least required_avail sources
-            masks.append(st_avail_count >= required_avail)
-            source_types_availability[source_type] = st_avail_count
-        # Only keep samples where at least one source of each group is available.
-        for group in must_include_groups:
+        # Group availability criteria: for each group of sources, only keep the samples
+        # where at least min_avail sources from the group are available.
+        # Note: the max_avail criterion will be applied later, in __getitem__.
+        # First, the user can specify source names, but they can also specify source types.
+        # We need to convert the source types to source names.
+        for group_name, group_avail_dict in self.groups_availability.items():
+            group_sources = []
+            for s in group_avail_dict["sources"]:
+                if s in source_names:
+                    group_sources.append(s)
+                elif s in self.source_types:
+                    # Add all sources of that type
+                    type_sources = [source.name for source in self.sources if source.type == s]
+                    group_sources.extend(type_sources)
+                # If the source/type is not found, print a warning, but it could be that the
+                # source is simply not in the dataset split, so we don't raise an error.
+                else:
+                    print(f"Warning: source or source type {s} not found among dataset sources.")
+            group_avail_dict["sources"] = group_sources
+        # Now apply the min_avail criterion for each group
+        for group_avail_dict in self.groups_availability.values():
+            # If some sources are never available, they won't be in available_sources.columns.
+            min_avail = group_avail_dict["availability"][0]  # Minimum number of sources
+            group = group_avail_dict["sources"]  # The sources in the group
+            group = [s for s in group if s in available_sources.columns]
             group_avail_count = available_sources[group].sum(axis=1)
-            masks.append(group_avail_count >= 1)
+            masks.append(group_avail_count >= min_avail)
         # Combine the masks with a logical AND
         mask = np.logical_and.reduce(masks)
         # We can now build the reference dataframe:
         self.reference_df = self.df[mask][["sid", "time", "source_name", "intensity"]]
         self.reference_df["n_available_sources"] = available_sources_count[mask]
-        for source_type, st_avail_count in source_types_availability.items():
-            self.reference_df["n_available_sources_" + source_type] = st_avail_count[mask]
 
         # If forecasting, only use the forecast sources as references
         if self.forecasting_sources is not None:
@@ -357,10 +355,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
         # If no samples are left, raise an error
         if len(self.reference_df) == 0:
-            raise ValueError(
-                f"No samples left after filtering for {split} with min_available_sources="
-                f"{min_available_sources} and min_ref_time_delta={self.min_ref_time_delta}."
-            )
+            raise ValueError(f"No samples left after filtering for split {split}.")
 
         # ========================================================================================
         # Pre-computation to speed up the data loading: instead of isolating the rows
@@ -453,11 +448,19 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         if not self.select_most_recent:
             sample_df = sample_df.sample(frac=1, random_state=self.rng.integers(0, 1e6))
 
-        # For each source type, only keep the maximum number of sources allowed.
-        sample_df = sample_df.groupby("source_type", group_keys=False).apply(
-            lambda g: g.head(self.source_types_max_avail.get(g.name, len(g))),
-            include_groups=False,
-        )
+        # Group availability criterion: if there are too many sources from a given group,
+        # we only keep the maximum allowed number of sources from that group.
+        # (Random if select_most_recent is False due to above, otherwise most recent.)
+        for group_avail_dict in self.groups_availability.values():
+            max_avail = group_avail_dict["availability"][1]  # How many sources to keep
+            group = group_avail_dict["sources"]  # The sources in the group
+            if max_avail is not None:
+                group_mask = sample_df["source_name"].isin(group)
+                group_samples = sample_df[group_mask]
+                if len(group_samples) > max_avail:
+                    # Keep only the first max_avail samples from the group
+                    to_drop = group_samples.index[max_avail:]
+                    sample_df = sample_df.drop(index=to_drop)
 
         # Sort the sample dataframe by time, most recent first
         sample_df = sample_df.sort_values("time", ascending=False)

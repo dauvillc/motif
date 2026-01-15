@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - override /sources: era5
+  - override /sources: gmi_radar
   - override /lightning_module: deterministic
   - override /lr_scheduler: cosine_warmup_150epochs
   - override /metrics: none
@@ -8,23 +8,26 @@ defaults:
 
 lightning_module:
   patch_size: 4
-  forecasting_mode: true
+  mask_only_sources:
+    - tc_primed_radar_GMI_GPM
 
 wandb:
-  name: det_era5
-  group: det_era5
+  name: det_gmi_radar
+  group: det_gmi_radar
 
 dataset:
   train:
-    dt_max: 6
-    forecasting_lead_time: 21
-    forecasting_sources: ['tc_primed_era5']
+    dt_max: 1
     groups_availability:
-      era5:
+      gmi:
         sources:
-          - tc_primed_era5
+          - tc_primed_pmw_GMI_GPM
         # Min, max number of sources from the group
-        availability: [1, null]
+        availability: [1, 1]
+      radar:
+        sources:
+          - tc_primed_radar_GMI_GPM
+        availability: [1, 1]
 
 trainer:
-  strategy: ddp
+  strategy: ddp_find_unused_parameters_true

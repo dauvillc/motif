@@ -4,7 +4,7 @@ defaults:
   - override /lightning_module: deterministic
   - override /lr_scheduler: cosine_warmup_150epochs
   - override /metrics: none
-  - override /model: motif_12b_d512
+  - override /model: motif_ds_12b_d384
 
 lightning_module:
   patch_size: 4
@@ -16,9 +16,11 @@ wandb:
 dataset:
   train:
     dt_max: 6
-    min_available_sources: 2
-    source_types_max_avail:
-      pmw: 3
+    groups_availability:
+      pmw:
+        sources: ['pmw']  # Includes all sources of type 'pmw'
+        # Min, max number of sources from the group
+        availability: [2, 3]
 
 trainer:
   strategy: ddp

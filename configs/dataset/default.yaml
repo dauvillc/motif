@@ -10,23 +10,25 @@ train:
   # and the sample's reference time.
   dt_max: ???
   dt_max_norm: null
-  # Minimum number of sources that must be available in a sample
-  # for it to be included in the dataset.
-  min_available_sources: ???
-  # Minimum number of sources of each type that must be available in a sample
-  # for it to be included in the dataset.
-  # Unspecified source types means at least 0 sources of that type (no restriction).
-  source_types_min_avail: {}
-  # For each source type, max number of observations that can be included for each
-  # source of that type.
-  source_types_max_avail: {}
+  # Availabiity criteria by groups of sources: for each group, specify
+  # the list of sources in the group, and the (min, max) number of
+  # sources from that group that must be available in each sample.
+  # Structure:
+  # {
+  #   group_name1: {
+  #       sources: [source1, source2, ...],
+  #       availability: [min_avail, max_avail]
+  #   },
+  #   group_name2: {
+  #       ...
+  #   }
+  # }
+  groups_availability: {}  # By default, no availability criteria
   # Minimum difference in hours between two samples of the same storm.
   # This can be used to reduce redundancy and limit the number of samples.
   min_ref_time_delta: 0
   # Number of workers for the data loading
   num_workers: ${dataloader.num_workers}
-  # List of source names that must be included in each sample
-  must_include_groups: []
   # By default, don't select the most recent sources
   select_most_recent: false
   # Whether to mask the spatial coordinates of the sources
@@ -49,12 +51,9 @@ val:
     variables_dict: ${sources}
   dt_max: ${dataset.train.dt_max}
   dt_max_norm: ${dataset.train.dt_max_norm}
-  min_available_sources: ${dataset.train.min_available_sources}
-  source_types_min_avail: ${dataset.train.source_types_min_avail}
-  source_types_max_avail: ${dataset.train.source_types_max_avail}
+  groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}
-  must_include_groups: ${dataset.train.must_include_groups}
   select_most_recent: ${dataset.train.select_most_recent}
   forecasting_lead_time: ${dataset.train.forecasting_lead_time}
   forecasting_sources: ${dataset.train.forecasting_sources}
@@ -72,12 +71,9 @@ test:
     variables_dict: ${sources}
   dt_max: ${dataset.train.dt_max}
   dt_max_norm: ${dataset.train.dt_max_norm}
-  min_available_sources: ${dataset.train.min_available_sources}
-  source_types_min_avail: ${dataset.train.source_types_min_avail}
-  source_types_max_avail: ${dataset.train.source_types_max_avail}
+  groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}
-  must_include_groups: ${dataset.train.must_include_groups}
   select_most_recent: ${dataset.train.select_most_recent}
   forecasting_lead_time: ${dataset.train.forecasting_lead_time}
   forecasting_sources: ${dataset.train.forecasting_sources}
