@@ -8,10 +8,6 @@ import lightning.pytorch as pl
 import torch
 
 from motif.data.grid_functions import distance_to_overlap
-from motif.utils.coordinates import (
-    embed_coords_to_sincos,
-    normalize_coords_across_sources,
-)
 
 # Local module imports
 from motif.utils.scheduler import CosineAnnealingWarmupRestarts
@@ -97,16 +93,9 @@ class MultisourceAbstractModule(pl.LightningModule, ABC):
         self.save_hyperparameters(ignore=["backbone", "metrics"])
 
     def preproc_input(self, x):
-        # Normalize the coordinates across sources to make them relative instead of absolute
-        # (i.e the min coord across all sources of a sample is always 0 and the max is 1).
-        coords = [source["coords"] for source in x.values()]
-        normed_coords = embed_coords_to_sincos(coords)
-        if self.normalize_coords_across_sources:
-            normed_coords = normalize_coords_across_sources(normed_coords)
-
         input_ = {}
         for i, (source_index_pair, data) in enumerate(x.items()):
-            c, v = normed_coords[i].float(), data["values"].float()
+            c, v = data["coords"].float(), data["values"].float()
             lm, d = data["landmask"].float(), data["dist_to_center"].float()
             dt = data["dt"].float()
             # Deduce the availability mask level from where the values are missing

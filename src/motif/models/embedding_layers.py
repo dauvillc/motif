@@ -1,5 +1,7 @@
 """Implements embedding layers."""
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -134,6 +136,74 @@ class ConvPatchEmbedding2d(nn.Module):
         return embedded_image
 
 
+class SinusoidalEmbedding(nn.Module):
+    """
+    Sinusoidal embedding using Fourier features.
+    Based on the standard transformer position embedding.
+    """
+
+    def __init__(self, dim, max_period=10000):
+        super().__init__()
+        if dim % 2 != 0:
+            raise ValueError("Embedding dimension must be even.")
+        self.dim = dim
+        self.max_period = max_period
+
+    def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Tensor of shape (..., C) or (..., C, 1) containing the input values.
+        Returns:
+            torch.Tensor: Tensor of shape (..., C, fourier_dim) containing sinusoidal embeddings.
+        """
+        if x.size(-1) > 1:
+            x = x.unsqueeze(-1)  # (..., C, 1)
+
+        half = self.dim // 2
+        freqs = torch.exp(
+            -math.log(self.max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
+        ).to(device=x.device)  # (half,)
+
+        args = x.float() * freqs[None]  # (..., C, half)
+        embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)  # (..., C, dim)
+
+        return embedding
+
+
+class SpatioTemporalFourierCoordinateEmbedding(nn.Module):
+    """
+    Embeds spatio-temporal coordinates (latitude, longitude, time) using Fourier features
+    and a projection MLP.
+    """
+
+    def __init__(self, fourier_dim):
+        """
+        Args:
+            fourier_dim (int): Dimension of the Fourier features for both spatial
+                and temporal embeddings.
+        """
+        super().__init__()
+        self.embedder = SinusoidalEmbedding(fourier_dim)
+
+    def forward(self, coords, times):
+        """
+        Args:
+            coords (torch.Tensor): Tensor of shape (B, 2, H, W) containing lat/lon at each pixel.
+            times (torch.Tensor): Tensor of shape (B,) containing time values.
+        Returns:
+            torch.Tensor: Tensor of shape (B, 3 * F, H, W) containing the embedded coordinates
+                where F is the fourier_dim.
+        """
+        B, _, H, W = coords.shape
+        lat_lon = coords.permute(0, 2, 3, 1).reshape(B * H * W, 2)  # (B*H*W, 2)
+        times = times.view(B, 1).expand(B, H * W).reshape(B * H * W, 1)  # (B*H*W, 1)
+        full_coords = torch.cat([lat_lon, times], dim=1)  # (B*H*W, 3)
+        fourier_coords = self.embedder(full_coords)  # (B*H*W, 3, fourier_dim)
+        fourier_coords = fourier_coords.view(B, H, W, 3 * fourier_coords.size(-1))
+        fourier_coords = fourier_coords.permute(0, 3, 1, 2)  # (B, 3*fourier_dim, H, W)
+        return fourier_coords
+
+
 class SourcetypeEmbedding2d(nn.Module):
     """A class that embeds the values and coordinates of a 2D source, including optional
     characteristic variables.
@@ -155,11 +225,11 @@ class SourcetypeEmbedding2d(nn.Module):
         values_dim,
         coords_dim,
         cond_dim,
+        dff_step_fourier_dim=256,
+        coords_fourier_dim=64,
         n_charac_vars=0,
         use_diffusion_t=True,
         pred_mean_channels=0,
-        include_diffusion_t_in_values=False,
-        include_coords_in_conditioning=False,
         conditioning_mlp_layers=0,
         coords_corner_and_center_embedding=False,
     ):
@@ -171,14 +241,14 @@ class SourcetypeEmbedding2d(nn.Module):
             values_dim (int): Dimension of the values embedding space.
             coords_dim (int): Dimension of the coordinate embedding space.
             cond_dim (int): Dimension of the conditioning embedding space.
+            dff_step_fourier_dim (int): Dimension of the Fourier features for
+                the diffusion timestep embedding.
+            coords_fourier_dim (int): Dimension of the Fourier features for
+                the spatio-temporal coordinates.
             n_charac_vars (int): Number of optional characteristic variables.
             use_diffusion_t (bool): Whether to include a diffusion timestep embedding.
             pred_mean_channels (int): Number of channels for the predicted mean. If zero,
                 the predicted mean is not used.
-            include_diffusion_t_in_values (bool): Whether to include the diffusion
-                timestep in the values embedding (in addition to the conditioning).
-            include_coords_in_conditioning (bool): Whether to include the coordinates
-                in the conditioning embedding.
             conditioning_mlp_layers (int): Number of linear layers to apply
                 after the conditioning concatenation.
             coords_corner_and_center_embedding (bool): Whether to use a corner-and-center
@@ -191,28 +261,30 @@ class SourcetypeEmbedding2d(nn.Module):
         self.values_patch_size = patch_size
         self.use_diffusion_t = use_diffusion_t
         self.use_predicted_mean = pred_mean_channels > 0
-        self.include_diffusion_t_in_values = include_diffusion_t_in_values
-        if self.include_diffusion_t_in_values and not self.use_diffusion_t:
-            raise ValueError("include_diffusion_t_in_values is True but use_diffusion_t is False.")
-        self.include_coords_in_conditioning = include_coords_in_conditioning
 
-        # landmask + availability mask + predicted mean + diffusion timestep
-        ch = channels + 2 + pred_mean_channels + int(include_diffusion_t_in_values)
+        # landmask + availability mask + predicted mean
+        ch = channels + 2 + pred_mean_channels
         self.values_embedding = ConvPatchEmbedding2d(ch, patch_size, values_dim, norm=True)
 
         # Coords embedding layers
         self.coords_emb_dim = coords_dim
+        # - Fourier embedding
+        self.coords_fourier_embedder = SpatioTemporalFourierCoordinateEmbedding(coords_fourier_dim)
+        # - ViT patch embedding or corner-and-center embedding
         if coords_corner_and_center_embedding:
-            self.coords_embedding = CornerAndCenterEmbedding2d(3, coords_dim, norm=False)
+            self.coords_embedding = CornerAndCenterEmbedding2d(
+                coords_fourier_dim * 3, coords_dim, norm=False
+            )
         else:
             self.coords_patch_size = patch_size
-            self.coords_embedding = ConvPatchEmbedding2d(3, patch_size, coords_dim, norm=False)
-        self.time_embedding = nn.Linear(1, coords_dim)
+            self.coords_embedding = ConvPatchEmbedding2d(
+                coords_fourier_dim * 3, patch_size, coords_dim, norm=False
+            )
         self.coords_norm = nn.LayerNorm(coords_dim)
 
         # Conditioning embedding layers
         # - spatial conditioning
-        ch_spatial_cond = 1 + int(self.include_coords_in_conditioning) * 3  # landmask + [coords]
+        ch_spatial_cond = 1  # Land-sea mask
         self.spatial_cond_embedding = ConvPatchEmbedding2d(
             ch_spatial_cond,
             patch_size,
@@ -221,12 +293,20 @@ class SourcetypeEmbedding2d(nn.Module):
             mlp_layers=conditioning_mlp_layers,
         )
         # - 0D / 1D embeddings
-        # there's always at least 1 channel: the availability flag
-        ch_cond = 1 + n_charac_vars + int(self.use_diffusion_t)
-        ch_cond += int(self.include_coords_in_conditioning)  # time coord if included
+        # Availability flag + characteristic variables
+        ch_cond = 1 + n_charac_vars
         self.cond_embedding = LinearEmbedding(
             ch_cond, cond_dim, n_layers=conditioning_mlp_layers, norm=False
         )
+        # If requested, including a sinusoidal embedding of the diffusion timestep.
+        if self.use_diffusion_t:
+            self.time_embedder = SinusoidalEmbedding(dff_step_fourier_dim)
+            # 2. MLP to project it to the conditioning dimension
+            self.time_mlp = nn.Sequential(
+                nn.Linear(dff_step_fourier_dim, cond_dim),
+                nn.SiLU(),  # Swish (SiLU) is standard for time embeddings
+                nn.Linear(cond_dim, cond_dim),
+            )
         # final layer normalization for the conditioning
         self.cond_norm = nn.LayerNorm(cond_dim)
 
@@ -234,7 +314,7 @@ class SourcetypeEmbedding2d(nn.Module):
         """
         Args:
             data (dict): Must contain:
-                - "coords": (B, 3, H, W) coordinate tensor.
+                - "coords": (B, 2, H, W) lat/lon tensor.
                 - "dt": (B,) time delta tensor.
                 - "values": (B, C, H, W) source pixel data.
                 - "avail_mask": (B, H, W) data availability mask.
@@ -260,23 +340,15 @@ class SourcetypeEmbedding2d(nn.Module):
             values_tensors = [values, avail_mask, landmask]
             if self.use_predicted_mean:
                 values_tensors.append(data["pred_mean"])
-            if self.include_diffusion_t_in_values and self.use_diffusion_t:
-                diffusion_t = data["diffusion_t"].view(-1, 1, 1, 1)
-                diffusion_t = diffusion_t.expand(-1, 1, values.size(2), values.size(3))
-                values_tensors.append(diffusion_t)
             values = torch.cat(values_tensors, dim=1)  # (B, C, H, W)
             embedded_values = self.values_embedding(values)
 
         # Embed coords
-        coords = data["coords"]
-        dt = data["dt"].view(coords.size(0), 1, 1, 1)
-        embedded_coords = self.coords_embedding(coords)
-        if isinstance(self.coords_embedding, CornerAndCenterEmbedding2d):
-            # expand to match the spatial dimensions of the values embedding
-            h, w = embedded_values.shape[1:3]
-            embedded_coords = embedded_coords.view(embedded_coords.size(0), 1, 1, -1)
-            embedded_coords = embedded_coords.expand(-1, h, w, -1)
-        embedded_coords = embedded_coords + self.time_embedding(dt)
+        coords = data["coords"]  # (B, 2, H, W)
+        dt = data["dt"]  # (B,)
+        fourier_coords = self.coords_fourier_embedder(coords, dt)  # (B, 3*F, H, W)
+        with torch.backends.cudnn.flags(enabled=self.values_patch_size <= 4):
+            embedded_coords = self.coords_embedding(fourier_coords)  # (B, h, w, coords_dim)
         embedded_coords = self.coords_norm(embedded_coords)
 
         # Conditioning tensor
@@ -284,12 +356,7 @@ class SourcetypeEmbedding2d(nn.Module):
         b = values.size(0)
         # Spatial conditionings (embedded together via patch embedding)
         # - Land-sea mask
-        spatial_cond = [landmask]
-        if self.include_coords_in_conditioning:
-            spatial_cond.append(coords)
-        # - optionally, the spatial coordinates
-        spatial_cond = torch.cat(spatial_cond, dim=1)  # (B, C_spatial_cond, H, W)
-        spatial_cond = self.spatial_cond_embedding(spatial_cond)
+        spatial_cond = self.spatial_cond_embedding(landmask)  # (B, h, w, cond_dim)
         available_conditioning.append(spatial_cond)
         # Non-spatial conditionings: we'll concatenate the ones that are available
         # and embed them with a single linear embedding.
@@ -299,137 +366,26 @@ class SourcetypeEmbedding2d(nn.Module):
         # - Characteristic variables
         if "characs" in data and data["characs"] is not None:
             conds.append(data["characs"])  # (B, n_characs_vars)
-        # - Diffusion timestep
-        if self.use_diffusion_t:
-            diffusion_t = data["diffusion_t"].view(b, 1)
-            conds.append(diffusion_t)
-        # - optionally, the time coordinate
-        if self.include_coords_in_conditioning:
-            time_coord = data["coords"][:, 2, 0, 0].view(b, 1)
-            conds.append(time_coord)
         # Concatenate the conditioning tensors
         conds = torch.cat(conds, dim=1)  # (B, ch_cond)
         conds = self.cond_embedding(conds)  # (B, values_dim)
         # Reshape to sum to the spatial dimensions
         conds = conds.view(b, 1, 1, -1)
         available_conditioning.append(conds)
+        # - Diffusion timestep (if used)
+        if self.use_diffusion_t:
+            diffusion_t = data["diffusion_t"]  # (B,)
+            # Embed the diffusion timestep with a sinusoidal embedding + MLP
+            diffusion_t_emb = self.time_embedder(diffusion_t)  # (B, time_emb_dim)
+            diffusion_t_emb = self.time_mlp(diffusion_t_emb)  # (B, cond_dim)
+            # Reshape to sum to the spatial dimensions
+            diffusion_t_emb = diffusion_t_emb.view(b, 1, 1, -1)
+            available_conditioning.append(diffusion_t_emb)
         # Finally, sum the available conditioning tensors
         # and apply layer normalization.
         if len(available_conditioning) > 0:
             conditioning = sum(available_conditioning)
             conditioning = self.cond_norm(conditioning)
-        else:
-            conditioning = None
-
-        return embedded_values, embedded_coords, conditioning
-
-
-class SourcetypeEmbedding0d(nn.Module):
-    """A class that embeds the values and time of a 0D source, including optional
-    characteristic variables.
-
-    This module handles both time embeddings and values embeddings (channels, masks),
-    then outputs their embedded representations.
-    Additionally, a conditioning tensor is computed that embeds the conditioning
-    that isn't the values or the time. This includes:
-    - The characteristic variables.
-    - The diffusion timestep.
-    If those elements aren't given, the conditioning tensor is set to None.
-    """
-
-    def __init__(
-        self,
-        channels,
-        values_dim,
-        coords_dim,
-        n_charac_vars=0,
-        use_diffusion_t=True,
-        pred_mean_channels=0,
-    ):
-        """
-        Args:
-            channels (int): Number of channels for the source data, excluding
-                land-sea and availability masks.
-            values_dim (int): Dimension of the values embedding space.
-            coords_dim (int): Dimension of the coordinate (time) embedding space.
-            n_charac_vars (int): Number of optional characteristic variables.
-            use_diffusion_t (bool): Whether to include a diffusion timestep embedding.
-            pred_mean_channels (int): Number of channels for the predicted mean. If zero,
-                the predicted mean is not used.
-        """
-        super().__init__()
-
-        # Values embedding layers
-        self.use_diffusion_t = use_diffusion_t
-        self.use_predicted_mean = pred_mean_channels > 0
-
-        ch = channels + 2 + pred_mean_channels  # landmask + availability + predicted mean
-        self.values_embedding = nn.Sequential(
-            nn.Linear(ch, values_dim), nn.GELU(), nn.LayerNorm(values_dim)
-        )
-
-        # Coords embedding layers
-        self.coords_emb_dim = coords_dim
-        self.coords_embedding = nn.Linear(3, coords_dim)
-        self.time_embedding = nn.Linear(1, coords_dim)
-        self.coords_norm = nn.LayerNorm(coords_dim)
-
-        # Conditioning embedding layers
-        # there are always at least 2 channels: landmask and availability flag
-        ch_cond = 2 + pred_mean_channels + n_charac_vars + int(self.use_diffusion_t)
-        self.cond_embedding = LinearEmbedding(ch_cond, values_dim, norm=True)
-
-    def forward(self, data):
-        """
-        Args:
-            data (dict): Must contain:
-                - "coords": (B, 3) coordinate tensor.
-                - "dt": (B,) time delta tensor.
-                - "values": (B, C) source pixel data.
-                - "avail_mask": (B,) data availability mask.
-                - "landmask": (B,) land-sea mask.
-                - "avail": (B,) tensor, valued 1 if the sample is available, -1 if missing,
-                    and 0 if masked (and to be reconstructed).
-                - Optionally "characs": (B, n_characs_vars) characteristic variables.
-                - Optionally "diffusion_t": (B,) diffusion timestep.
-                - Optionally "pred_mean": (B, C_out), predicted mean.
-        Returns:
-            embedded_values: (B, values_dim) tensor of embedded values.
-            embedded_coords: (B, coords_dim) tensor of embedded coordinates.
-            conditioning: (B, values_dim) tensor containing the conditioning, or
-                None if no conditioning is given.
-        """
-
-        # Embed values
-        values = data["values"]
-        avail_mask = data["avail_mask"].unsqueeze(1)
-        landmask = data["landmask"].unsqueeze(1)
-        values = torch.cat([values, avail_mask, landmask], dim=1)
-        if self.use_predicted_mean:
-            predicted_mean = data["pred_mean"]
-            values = torch.cat([values, predicted_mean], dim=1)
-        embedded_values = self.values_embedding(values)
-
-        # Embed coords
-        coords = data["coords"]
-        dt = data["dt"].view(coords.size(0), 1)
-        embedded_coords = self.coords_embedding(coords)
-        embedded_coords += self.time_embedding(dt)
-        embedded_coords = self.coords_norm(embedded_coords)
-
-        # Conditioning tensor
-        available_conditioning = [data["landmask"].view(-1, 1), data["avail"].view(-1, 1)]
-        if "characs" in data and data["characs"] is not None:
-            available_conditioning.append(data["characs"])
-        if self.use_diffusion_t:
-            diffusion_t = data["diffusion_t"].view(-1, 1)
-            available_conditioning.append(diffusion_t)
-        if self.use_predicted_mean:
-            available_conditioning.append(predicted_mean)
-        # Concatenate the conditioning tensors and embed them at once
-        if len(available_conditioning) > 0:
-            conditioning = torch.cat(available_conditioning, dim=1)
-            conditioning = self.cond_embedding(conditioning)
         else:
             conditioning = None
 

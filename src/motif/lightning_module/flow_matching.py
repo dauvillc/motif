@@ -16,11 +16,11 @@ from motif.lightning_module.base_reconstructor import (
     MultisourceAbstractModule,
     MultisourceAbstractReconstructor,
 )
+from motif.utils.checkpoints import load_experiment_cfg_from_checkpoint
 from motif.utils.solver import MultisourceEulerODESolver
 
 # Visualization imports
 from motif.utils.visualization import display_realizations
-from utils.checkpoints import load_experiment_cfg_from_checkpoint
 
 
 class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
@@ -199,9 +199,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 validation_dir=validation_dir,
                 **det_model_kwargs,
             )
-            state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)[
-                "state_dict"
-            ]
+            state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
             self.det_model.load_state_dict(state_dict, strict=True)
             self.det_model.eval()
             self.det_model.requires_grad_(False)

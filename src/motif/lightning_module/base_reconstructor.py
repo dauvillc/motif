@@ -7,14 +7,12 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
 
-from motif.models.embedding_layers import SourcetypeEmbedding0d, SourcetypeEmbedding2d
-from motif.models.output_layers import (
-    SourcetypeProjection0d,
-    SourcetypeProjection2d,
-)
-
 # Local module imports
 from motif.lightning_module.base_module import MultisourceAbstractModule
+from motif.models.embedding_layers import SourcetypeEmbedding2d
+from motif.models.output_layers import (
+    SourcetypeProjection2d,
+)
 
 
 class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
@@ -59,8 +57,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
         validation_dir=None,
         metrics={},
         use_modulation_in_output_layers=False,
-        include_diffusion_t_in_values=False,
-        include_coords_in_conditioning=False,
         conditioning_mlp_layers=0,
         coords_corner_and_center_embedding=False,
         output_resnet_channels=None,
@@ -103,10 +99,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                 A metric should have the signature metric(y_pred, y_true, masks, **kwargs)
                 and return a dict {source: tensor of shape (batch_size,)}.
             use_modulation_in_output_layers (bool): If True, applies modulation to the output layers.
-            include_diffusion_t_in_values (bool): If True, includes the diffusion timestep
-                in the values embedding (in addition to the conditioning).
-            include_coords_in_conditioning (bool): Whether to include the coordinates
-                in the conditioning embedding.
             conditioning_mlp_layers (int): Number of linear layers to apply in the conditioning
                 embedding after the concatenation of the different conditioning variables.
             coords_corner_and_center_embedding (bool): Whether to use a corner-and-center
@@ -156,8 +148,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
             use_modulation_in_output_layers,
             output_resnet_channels,
             output_resnet_blocks,
-            include_diffusion_t_in_values=include_diffusion_t_in_values,
-            include_coords_in_conditioning=include_coords_in_conditioning,
             conditioning_mlp_layers=conditioning_mlp_layers,
             coords_corner_and_center_embedding=coords_corner_and_center_embedding,
         )
@@ -167,8 +157,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
         use_modulation_in_output_layers,
         output_resnet_channels,
         output_resnet_blocks,
-        include_diffusion_t_in_values=False,
-        include_coords_in_conditioning=False,
         conditioning_mlp_layers=0,
         coords_corner_and_center_embedding=False,
     ):
@@ -201,11 +189,9 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                         self.values_dim,
                         self.coords_dim,
                         self.cond_dim,
-                        source.n_charac_variables(),
+                        n_charac_vars=source.n_charac_variables(),
                         use_diffusion_t=self.use_diffusion_t,
                         pred_mean_channels=pred_mean_channels,
-                        include_diffusion_t_in_values=include_diffusion_t_in_values,
-                        include_coords_in_conditioning=include_coords_in_conditioning,
                         conditioning_mlp_layers=conditioning_mlp_layers,
                         coords_corner_and_center_embedding=coords_corner_and_center_embedding,
                     )
@@ -218,20 +204,10 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                         resnet_channels=output_resnet_channels,
                         resnet_blocks=output_resnet_blocks,
                     )
-                elif source.dim == 0:
-                    self.sourcetype_embeddings[source.type] = SourcetypeEmbedding0d(
-                        n_input_channels,
-                        self.values_dim,
-                        self.coords_dim,
-                        source.n_charac_variables(),
-                        use_diffusion_t=self.use_diffusion_t,
-                        use_predicted_mean=self.use_det_model,
-                        pred_mean_channels=pred_mean_channels,
-                    )
-                    self.sourcetype_output_projs[source.type] = SourcetypeProjection0d(
-                        self.values_dim,
-                        n_output_channels,
-                        use_modulation=use_modulation_in_output_layers,
+                else:
+                    raise NotImplementedError(
+                        f"Embedding layers for source type {source.type} with "
+                        f"dimensionality {source.dim} are not implemented yet."
                     )
 
             else:
@@ -350,9 +326,7 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                     if source_name not in self.mask_only_sources:
                         noise[:, i] = -2.0  # Lower than the minimum possible noise (-1)
             # Gather the indices of the sources to mask for each sample
-            _, sources_to_mask = noise.topk(
-                self.n_sources_to_mask, dim=1
-            )  # (B, n_sources_to_mask)
+            _, sources_to_mask = noise.topk(self.n_sources_to_mask, dim=1)  # (B, n_sources_to_mask)
             # Deduce a matrix M of shape (B, n_sources) such that M[b, i] = 1 if the source i
             # should be masked for the sample b, and 0 otherwise.
             masked_sources_matrix = torch.zeros(
