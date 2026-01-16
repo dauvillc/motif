@@ -170,9 +170,7 @@ class MultisourceGeneralBackbone(nn.Module):
                 ]
 
         # Return only the predicted values, like the original backbone
-        return {
-            source_index_pair: x[source_index_pair]["values"] for source_index_pair in x.keys()
-        }
+        return {source_index_pair: x[source_index_pair]["values"] for source_index_pair in x.keys()}
 
 
 class AdapativeConditionalNormalization(nn.Module):
