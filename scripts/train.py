@@ -127,7 +127,7 @@ class TrainJob(submitit.helpers.Checkpointable):
         # Model checkpoint after every epoch if val_loss improves
         epoch_checkpoint_callback = ModelCheckpoint(
             dirpath=Path(cfg["paths"]["checkpoints"]) / run_id,
-            filename=f"{run_id}-" + "{epoch}-best",
+            filename=f"{run_id}-" + "{epoch}-{step}-best",
             monitor="val_loss",
             mode="min",
             save_top_k=1,
@@ -148,7 +148,7 @@ class TrainJob(submitit.helpers.Checkpointable):
         # Create the trainer
         trainer = pl.Trainer(
             logger=logger,
-            log_every_n_steps=500,
+            log_every_n_steps=100,
             callbacks=callbacks,
             deterministic=True,
             **cfg["trainer"],
@@ -156,7 +156,13 @@ class TrainJob(submitit.helpers.Checkpointable):
 
         # Train the model
         if resume_run_id and cfg["resume_mode"] == "resume":
-            trainer.fit(pl_module, train_dataloader, val_dataloader, ckpt_path=checkpoint_path)
+            trainer.fit(
+                pl_module,
+                train_dataloader,
+                val_dataloader,
+                ckpt_path=checkpoint_path,
+                weights_only=False,
+            )
         else:
             trainer.fit(pl_module, train_dataloader, val_dataloader)
 
