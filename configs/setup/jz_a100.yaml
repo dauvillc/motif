@@ -17,7 +17,6 @@ setup:
     - module purge
     - source ${oc.env:HOME}/.bash_profile
     - module load arch/h100
-    - module load pytorch-gpu/py3/2.6.0
 
 trainer:
   devices: 1

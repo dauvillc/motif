@@ -14,6 +14,5 @@ setup:
   local_setup:
     - module purge
     - source ${oc.env:HOME}/.bash_profile
-    - module load pytorch-gpu/py3/2.6.0
   
 num_workers: 39
