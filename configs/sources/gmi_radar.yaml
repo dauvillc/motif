@@ -1,0 +1,7 @@
+tc_primed:
+  pmw:
+    GMI_GPM:
+      variables: ['TB_36.64H', 'TB_36.64V', 'TB_89.0H', 'TB_89.0V']
+  radar:
+    GMI_GPM:
+      variables: ['nearSurfPrecipTotRate']
