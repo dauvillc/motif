@@ -1,7 +1,10 @@
 """Implements a general backbone for the mask-autoencoding task that also updates coordinates,
 which can be used with custom blocks."""
 
+from functools import partial
+
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from motif.models.motif_double.cross_attention import MultisourcesWindowedCrossAttention
 from motif.models.motif_double.patch_merging import (
@@ -42,6 +45,7 @@ class MultisourceGeneralBackbone(nn.Module):
         mlp_inner_ratio=2,
         dropout=0.0,
         downsample_input=False,
+        use_checkpointing=False,
     ):
         """
         Args:
@@ -54,10 +58,16 @@ class MultisourceGeneralBackbone(nn.Module):
                 If False, the embedded coordinates remain unchanged throughout the backbone.
             downsample_input (bool): Whether to downsample the inputs by a factor 2
                 before feeding them to the backbone.
+            use_checkpointing (bool): Whether to use gradient checkpointing to save memory
+                at the cost of extra computation.
         """
         super().__init__()
         cond_dim = cond_dim if cond_dim is not None else values_dim
         self.values_dim, self.coords_dim, self.cond_dim = values_dim, coords_dim, cond_dim
+        if use_checkpointing:
+            self.ckpt = partial(checkpoint, use_reentrant=False)
+        else:
+            self.ckpt = lambda fn, x: fn(x)
 
         # Optional downsampling and upsampling layers
         if downsample_input:
@@ -145,13 +155,13 @@ class MultisourceGeneralBackbone(nn.Module):
                 source_index_pair: x[source_index_pair]["values"].shape
                 for source_index_pair in x.keys()
             }
-            x = self.input_downsampling(x)
+            x = self.ckpt(self.input_downsampling, x)
 
         for block in self.blocks:
             # Update the values and coords via the successive layers
             for layer in block:
                 # Apply the layer and update the values and coordinates
-                layer_otp = layer(x)
+                layer_otp = self.ckpt(layer, x)
                 # Check that all sources are present in the output
                 assert set(x.keys()) == set(layer_otp.keys())
                 # Update the values and coordinates
@@ -161,7 +171,7 @@ class MultisourceGeneralBackbone(nn.Module):
 
         # Optional upsampling
         if hasattr(self, "input_upsampling"):
-            x = self.input_upsampling(x)
+            x = self.ckpt(self.input_upsampling, x)
             # Crop the values to the original shapes
             for source_index_pair in x.keys():
                 original_shape = shapes_before_ds[source_index_pair]
