@@ -33,6 +33,7 @@ dependencies = [
     "plotly>=6.5.0",
     "pudb>=2025.1.5",
     "pyinstrument>=5.1.1",
+    "pyqt6>=6.10.2",
     "pyresample>=1.35.0",
     "scikit-learn>=1.8.0",
     "scipy>=1.16.3",

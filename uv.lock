@@ -438,18 +438,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/fd/a7266970312df65e68b5641b86e0540a739182f5e9c62eec6dbd29f18055/cftime-1.6.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:85ba8e7356d239cfe56ef7707ac30feaf67964642ac760a82e507ee3c5db4ac4", size = 1642614, upload-time = "2025-10-13T18:56:09.815Z" },
     { url = "https://files.pythonhosted.org/packages/c4/73/f0035a4bc2df8885bb7bd5fe63659686ea1ec7d0cc74b4e3d50e447402e5/cftime-1.6.5-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:456039af7907a3146689bb80bfd8edabd074c7f3b4eca61f91b9c2670addd7ad", size = 1688090, upload-time = "2025-10-13T18:56:11.442Z" },
     { url = "https://files.pythonhosted.org/packages/88/15/8856a0ab76708553ff597dd2e617b088c734ba87dc3fd395e2b2f3efffe8/cftime-1.6.5-cp312-cp312-win_amd64.whl", hash = "sha256:da84534c43699960dc980a9a765c33433c5de1a719a4916748c2d0e97a071e44", size = 464840, upload-time = "2025-10-13T18:56:12.506Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/85/451009a986d9273d2208fc0898aa00262275b5773259bf3f942f6716a9e7/cftime-1.6.5-cp312-cp312-win_arm64.whl", hash = "sha256:c62cd8db9ea40131eea7d4523691c5d806d3265d31279e4a58574a42c28acd77", size = 450534, upload-time = "2026-01-02T21:16:48.784Z" },
     { url = "https://files.pythonhosted.org/packages/2e/60/74ea344b3b003fada346ed98a6899085d6fd4c777df608992d90c458fda6/cftime-1.6.5-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:4aba66fd6497711a47c656f3a732c2d1755ad15f80e323c44a8716ebde39ddd5", size = 502453, upload-time = "2025-10-13T18:56:13.545Z" },
     { url = "https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:89e7cba699242366e67d6fb5aee579440e791063f92a93853610c91647167c0d", size = 484541, upload-time = "2025-10-13T18:56:14.612Z" },
     { url = "https://files.pythonhosted.org/packages/4f/74/bb8a4566af8d0ef3f045d56c462a9115da4f04b07c7fbbf2b4875223eebd/cftime-1.6.5-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2f1eb43d7a7b919ec99aee709fb62ef87ef1cf0679829ef93d37cc1c725781e9", size = 1591014, upload-time = "2025-10-13T19:39:15.346Z" },
     { url = "https://files.pythonhosted.org/packages/ba/08/52f06ff2f04d376f9cd2c211aefcf2b37f1978e43289341f362fc99f6a0e/cftime-1.6.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e02a1d80ffc33fe469c7db68aa24c4a87f01da0c0c621373e5edadc92964900b", size = 1633625, upload-time = "2025-10-13T18:56:15.745Z" },
     { url = "https://files.pythonhosted.org/packages/cf/33/03e0b23d58ea8fab94ecb4f7c5b721e844a0800c13694876149d98830a73/cftime-1.6.5-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:18ab754805233cdd889614b2b3b86a642f6d51a57a1ec327c48053f3414f87d8", size = 1684269, upload-time = "2025-10-13T18:56:17.04Z" },
     { url = "https://files.pythonhosted.org/packages/a4/60/a0cfba63847b43599ef1cdbbf682e61894994c22b9a79fd9e1e8c7e9de41/cftime-1.6.5-cp313-cp313-win_amd64.whl", hash = "sha256:6c27add8f907f4a4cd400e89438f2ea33e2eb5072541a157a4d013b7dbe93f9c", size = 465364, upload-time = "2025-10-13T18:56:18.05Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/e8/ec32f2aef22c15604e6fda39ff8d581a00b5469349f8fba61640d5358d2c/cftime-1.6.5-cp313-cp313-win_arm64.whl", hash = "sha256:31d1ff8f6bbd4ca209099d24459ec16dea4fb4c9ab740fbb66dd057ccbd9b1b9", size = 450468, upload-time = "2026-01-02T21:16:50.193Z" },
     { url = "https://files.pythonhosted.org/packages/ea/6c/a9618f589688358e279720f5c0fe67ef0077fba07334ce26895403ebc260/cftime-1.6.5-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:c69ce3bdae6a322cbb44e9ebc20770d47748002fb9d68846a1e934f1bd5daf0b", size = 502725, upload-time = "2025-10-13T18:56:19.424Z" },
     { url = "https://files.pythonhosted.org/packages/d8/e3/da3c36398bfb730b96248d006cabaceed87e401ff56edafb2a978293e228/cftime-1.6.5-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:e62e9f2943e014c5ef583245bf2e878398af131c97e64f8cd47c1d7baef5c4e2", size = 485445, upload-time = "2025-10-13T18:56:20.853Z" },
     { url = "https://files.pythonhosted.org/packages/32/93/b05939e5abd14bd1ab69538bbe374b4ee2a15467b189ff895e9a8cdaddf6/cftime-1.6.5-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:7da5fdaa4360d8cb89b71b8ded9314f2246aa34581e8105c94ad58d6102d9e4f", size = 1584434, upload-time = "2025-10-13T19:39:17.084Z" },
     { url = "https://files.pythonhosted.org/packages/7f/89/648397f9936e0b330999c4e776ebf296ec3c6a65f9901687dbca4ab820da/cftime-1.6.5-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:bff865b4ea4304f2744a1ad2b8149b8328b321dd7a2b9746ef926d229bd7cd49", size = 1609812, upload-time = "2025-10-13T18:56:21.971Z" },
     { url = "https://files.pythonhosted.org/packages/e7/0f/901b4835aa67ad3e915605d4e01d0af80a44b114eefab74ae33de6d36933/cftime-1.6.5-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:e552c5d1c8a58f25af7521e49237db7ca52ed2953e974fe9f7c4491e95fdd36c", size = 1669768, upload-time = "2025-10-13T18:56:24.027Z" },
     { url = "https://files.pythonhosted.org/packages/22/d5/e605e4b28363e7a9ae98ed12cabbda5b155b6009270e6a231d8f10182a17/cftime-1.6.5-cp314-cp314-win_amd64.whl", hash = "sha256:e645b095dc50a38ac454b7e7f0742f639e7d7f6b108ad329358544a6ff8c9ba2", size = 463818, upload-time = "2025-10-13T18:56:25.376Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/89/a8f85ae697ff10206ec401c2621f5ca9f327554f586d62f244739ceeb347/cftime-1.6.5-cp314-cp314-win_arm64.whl", hash = "sha256:b9044d7ac82d3d8af189df1032fdc871bbd3f3dd41a6ec79edceb5029b71e6e0", size = 459862, upload-time = "2026-01-02T20:45:02.625Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/05/7410e12fd03a0c52717e74e6a1b49958810807dda212e23b65d43ea99676/cftime-1.6.5-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:9ef56460cb0576e1a9161e1428c9e1a633f809a23fa9d598f313748c1ae5064e", size = 533781, upload-time = "2026-01-02T20:45:04.818Z" },
+    { url = "https://files.pythonhosted.org/packages/44/ba/10e3546426d3ed9f9cc82e4a99836bb6fac1642c7830f7bdd0ac1c3f0805/cftime-1.6.5-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:4f4873d38b10032f9f3111c547a1d485519ae64eee6a7a2d091f1f8b08e1ba50", size = 515218, upload-time = "2026-01-02T20:45:06.788Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/68/efa11eae867749e921bfec6a865afdba8166e96188112dde70bb8bb49254/cftime-1.6.5-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ccce0f4c9d3f38dd948a117e578b50d0e0db11e2ca9435fb358fd524813e4b61", size = 1579932, upload-time = "2026-01-02T20:45:11.194Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/6c/0971e602c1390a423e6621dfbad9f1d375186bdaf9c9c7f75e06f1fbf355/cftime-1.6.5-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:19cbfc5152fb0b34ce03acf9668229af388d7baa63a78f936239cb011ccbe6b1", size = 1555894, upload-time = "2026-01-02T20:45:16.351Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/fc/8475a15b7c3209a4a68b563dfc5e01ce74f2d8b9822372c3d30c68ab7f39/cftime-1.6.5-cp314-cp314t-win_amd64.whl", hash = "sha256:4470cd5ef3c2514566f53efbcbb64dd924fa0584637d90285b2f983bd4ee7d97", size = 513027, upload-time = "2026-01-02T20:45:20.023Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/80/4ecbda8318fbf40ad4e005a4a93aebba69e81382e5b4c6086251cd5d0ee8/cftime-1.6.5-cp314-cp314t-win_arm64.whl", hash = "sha256:034c15a67144a0a5590ef150c99f844897618b148b87131ed34fda7072614662", size = 469065, upload-time = "2026-01-02T20:45:23.398Z" },
 ]
 
 [[package]]
@@ -1692,6 +1701,7 @@ dependencies = [
     { name = "plotly" },
     { name = "pudb" },
     { name = "pyinstrument" },
+    { name = "pyqt6" },
     { name = "pyresample" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -1735,6 +1745,7 @@ requires-dist = [
     { name = "plotly", specifier = ">=6.5.0" },
     { name = "pudb", specifier = ">=2025.1.5" },
     { name = "pyinstrument", specifier = ">=5.1.1" },
+    { name = "pyqt6", specifier = ">=6.10.2" },
     { name = "pyresample", specifier = ">=1.35.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "scipy", specifier = ">=1.16.3" },
@@ -2828,6 +2839,59 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/8b/a3f0618b03957de9db5489a04558a8826f43906628bb0b766033aa3b5548/pyproj-3.7.2-cp314-cp314t-win32.whl", hash = "sha256:c9b6f1d8ad3e80a0ee0903a778b6ece7dca1d1d40f6d114ae01bc8ddbad971aa", size = 6056848, upload-time = "2025-08-14T12:05:37.553Z" },
     { url = "https://files.pythonhosted.org/packages/bc/56/413240dd5149dd3291eda55aa55a659da4431244a2fd1319d0ae89407cfb/pyproj-3.7.2-cp314-cp314t-win_amd64.whl", hash = "sha256:1914e29e27933ba6f9822663ee0600f169014a2859f851c054c88cf5ea8a333c", size = 6517676, upload-time = "2025-08-14T12:05:39.126Z" },
     { url = "https://files.pythonhosted.org/packages/15/73/a7141a1a0559bf1a7aa42a11c879ceb19f02f5c6c371c6d57fd86cefd4d1/pyproj-3.7.2-cp314-cp314t-win_arm64.whl", hash = "sha256:d9d25bae416a24397e0d85739f84d323b55f6511e45a522dd7d7eae70d10c7e4", size = 6391844, upload-time = "2025-08-14T12:05:40.745Z" },
+]
+
+[[package]]
+name = "pyqt6"
+version = "6.10.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyqt6-qt6" },
+    { name = "pyqt6-sip" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/96/03/e756f52e8b0d7bb5527baf8c46d59af0746391943bdb8655acba22ee4168/pyqt6-6.10.2.tar.gz", hash = "sha256:6c0db5d8cbb9a3e7e2b5b51d0ff3f283121fa27b864db6d2f35b663c9be5cc83", size = 1085573, upload-time = "2026-01-08T16:40:00.244Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/3f/f073a980969aa485ef288eb2e3b94c223ba9c7ac9941543f19b51659b98d/pyqt6-6.10.2-cp39-abi3-macosx_10_14_universal2.whl", hash = "sha256:37ae7c1183fe4dd0c6aefd2006a35731245de1cb6f817bb9e414a3e4848dfd6d", size = 60244482, upload-time = "2026-01-08T16:38:50.837Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/3e/9a015651ec71cea2e2f960c37edeb21623ba96a74956c0827def837f7c6b/pyqt6-6.10.2-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:78e1b3d5763e4cbc84485aef600e0aba5e1932fd263b716f92cd1a40dfa5e924", size = 37899440, upload-time = "2026-01-08T16:39:09.027Z" },
+    { url = "https://files.pythonhosted.org/packages/51/74/a88fec2b99700270ca5d7dc7d650236a4990ed6fc88e055ca0fc8a339ee3/pyqt6-6.10.2-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:bbc3af541bbecd27301bfe69fe445aa1611a9b490bd3de77306b12df632f7ec6", size = 40748467, upload-time = "2026-01-08T16:39:29.551Z" },
+    { url = "https://files.pythonhosted.org/packages/75/34/be7a55529607b21db00a49ca53cb07c3092d2a5a95ea19bb95cfa0346904/pyqt6-6.10.2-cp39-abi3-win_amd64.whl", hash = "sha256:bd328cb70bc382c48861cd5f0a11b2b8ae6f5692d5a2d6679ba52785dced327b", size = 26015391, upload-time = "2026-01-08T16:39:42.946Z" },
+    { url = "https://files.pythonhosted.org/packages/af/de/d9c88f976602b7884fec4ad54a4575d48e23e4f390e5357ea83917358846/pyqt6-6.10.2-cp39-abi3-win_arm64.whl", hash = "sha256:7901ba1df024b7ee9fdacfb2b7661aeb3749ae8b0bef65428077de3e0450eabb", size = 26208415, upload-time = "2026-01-08T16:39:57.751Z" },
+]
+
+[[package]]
+name = "pyqt6-qt6"
+version = "6.10.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/eb/f04d547d8ed9f20c7b246db4ef5d93b49cab4692009a10652ed0a8b9d2aa/pyqt6_qt6-6.10.2-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:5761cfccc721da2311c3f1213577f0ff1df07bbbbe3fa3a209a256b82cf057e3", size = 68688870, upload-time = "2026-01-29T12:26:48.619Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/c8/d99e65ab01c2402fb6bc4f77abef7244f7d5fb2f2e6d5b0abdf71bb2e4fc/pyqt6_qt6-6.10.2-py3-none-macosx_11_0_arm64.whl", hash = "sha256:6dda853a8db1b8d1a2ddbbe76cc6c3aa86614cad14056bd3c0435d8feea73b2d", size = 62512013, upload-time = "2026-01-29T12:27:24.642Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/fe/01fd9b9d2ca139ef61582f2e2da249fa169229144294c1bb27db59ad8420/pyqt6_qt6-6.10.2-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:19c10b5f0806e9f9bac2c9759bd5d7d19a78967f330fd60a2db409177fa76e49", size = 84028760, upload-time = "2026-01-29T12:28:03.267Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/20/a0d027ebb267d3afaf319d94efe1ff4d667004ee83b96701329a4d11fb95/pyqt6_qt6-6.10.2-py3-none-manylinux_2_39_aarch64.whl", hash = "sha256:2e60d616861ca4565cd295418d605975aa2dc407ba4b94c1586a70c92e9cb052", size = 83063975, upload-time = "2026-01-29T12:28:48.928Z" },
+    { url = "https://files.pythonhosted.org/packages/06/8e/595f215876d507417cc8565e05519916d3b0b76baedea6a1e4e5105633fc/pyqt6_qt6-6.10.2-py3-none-win_amd64.whl", hash = "sha256:c4b7f7d66cc58bddf1bc1ca28dfcf7a45f58cfcb11d81d13a0510409dd4957ac", size = 78433821, upload-time = "2026-01-29T12:29:35.493Z" },
+    { url = "https://files.pythonhosted.org/packages/50/5f/2196e2b536217b87cb3d2ce13ef8f7607d08b02f1990a4bd84a88d293a3c/pyqt6_qt6-6.10.2-py3-none-win_arm64.whl", hash = "sha256:7164a6f0c1335358a3026df9865c8f75395b01f60f0dcd2f66c029ec16fc83d2", size = 58354426, upload-time = "2026-01-29T12:30:02.95Z" },
+]
+
+[[package]]
+name = "pyqt6-sip"
+version = "13.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/7d/d2916048e2e3960f68cb4e93907639844f7b8ff95897dcc98553776ccdfc/pyqt6_sip-13.11.0.tar.gz", hash = "sha256:d463af37738bda1856c9ef513e5620a37b7a005e9d589c986c3304db4a8a14d3", size = 92509, upload-time = "2026-01-13T16:01:32.16Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/a6/0e4d8fa7d6deb750bd0fdf89024e39c71fb127efb5eeedfab6830ad6679a/pyqt6_sip-13.11.0-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:6b3267cd93b7f4da6fdf9a6a26f3baed8faae06e5cdd76235f2acc2116c40a54", size = 112367, upload-time = "2026-01-13T16:01:09.08Z" },
+    { url = "https://files.pythonhosted.org/packages/66/e6/25dc20a03c46000e8b93aaf79347227926b67959283e5aab797daa7f64d8/pyqt6_sip-13.11.0-cp312-cp312-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:c30248d9bbe54c46a78e5d549da50295ecd6584b965597f751e272f000fb8527", size = 301150, upload-time = "2026-01-13T16:01:12.385Z" },
+    { url = "https://files.pythonhosted.org/packages/11/9f/e850cd350aade789660cafba38c00777e686040c06b8cd0b45339b80fcba/pyqt6_sip-13.11.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9c367b53a91e575ef66c1375f899713bdaf0a8b2c64b95ac226e9644854a4984", size = 323303, upload-time = "2026-01-13T16:01:10.736Z" },
+    { url = "https://files.pythonhosted.org/packages/77/26/5261d62108f7579407230f8c1d4dda43c18b5600ce70bf3becb2f997d5cc/pyqt6_sip-13.11.0-cp312-cp312-win_amd64.whl", hash = "sha256:077958105c2ea2f62be2f1a7611ff8bd44cb52fb5ea8fc8c59ea949144acb7b5", size = 53461, upload-time = "2026-01-13T16:01:13.875Z" },
+    { url = "https://files.pythonhosted.org/packages/46/80/6c88b97eda309d6babb7292200bf51165dc06d0204d891b7bf1fb17a8ed0/pyqt6_sip-13.11.0-cp312-cp312-win_arm64.whl", hash = "sha256:52812471619d3d3750b940d7d124cd0954107656924921ac177e098ba36362fb", size = 48650, upload-time = "2026-01-13T16:01:14.897Z" },
+    { url = "https://files.pythonhosted.org/packages/df/a0/46abcae4fce175a326185460a02c13ab81332bca7dd55c1e853ba6aee71e/pyqt6_sip-13.11.0-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:929716eebde1a64ffdb6b1715db6a22aefd5634d6df84858c7deb5e85be84fdf", size = 112353, upload-time = "2026-01-13T16:01:16.152Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/38/27c3aa3f153fcd83a0765fedf8e44a1136f189a322bcc9c494c5b3793cd7/pyqt6_sip-13.11.0-cp313-cp313-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:a75144e8a0bcf9d1a9069011890401748af353749f1de1b6a314b880781edf9d", size = 301497, upload-time = "2026-01-13T16:01:20.531Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/ac/1053ffce45e4174f0a8174557b88537aa82bf96ba03c7dd208c59de36f69/pyqt6_sip-13.11.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8082b5f57ffad5dddf5efcf0ef5eaf94841395aa4e7c374c79ef24cf49b0f0ce", size = 323498, upload-time = "2026-01-13T16:01:17.859Z" },
+    { url = "https://files.pythonhosted.org/packages/40/d3/447b30d1f00cc50ad9e5c53b2e920068606b16857da83f8036b390c79fad/pyqt6_sip-13.11.0-cp313-cp313-win_amd64.whl", hash = "sha256:8d49b5bf3d8d36cd7db93ddc54cd09dbba96a3fd926e445ef75499b41e47b5a3", size = 53469, upload-time = "2026-01-13T16:01:21.762Z" },
+    { url = "https://files.pythonhosted.org/packages/92/67/77e6fafcabd01c0a11166ab7464509896f137929f82c4f2e03aea1bf41b3/pyqt6_sip-13.11.0-cp313-cp313-win_arm64.whl", hash = "sha256:293eac1b53c66c54b03266cc30015ec77454af679043a4f188b9bb80a9656996", size = 48643, upload-time = "2026-01-13T16:01:22.669Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/28/a5178c8e005bafbf9c0fd507f45a3eef619ab582811414a0a461ee75994f/pyqt6_sip-13.11.0-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:4dc9c4df24af0571423c3e85b5c008bad42ed48558eef80fbc3e5d30274c5abb", size = 112431, upload-time = "2026-01-13T16:01:23.832Z" },
+    { url = "https://files.pythonhosted.org/packages/13/3c/02770b02b5a05779e26bd02c202c2fd32aa38e225d01f14c06908e33738c/pyqt6_sip-13.11.0-cp314-cp314-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:c974d5a193f32e55e746e9b63138503163ac63500dbb1fd67233d8a8d71369bd", size = 301236, upload-time = "2026-01-13T16:01:28.733Z" },
+    { url = "https://files.pythonhosted.org/packages/40/47/5af493a698cc520581ca1000b4ab09b8182992053ffe2478062dde5e4671/pyqt6_sip-13.11.0-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4284540ffccd8349763ddce3518264dde62f20556720d4061b9c895e09011ca0", size = 323919, upload-time = "2026-01-13T16:01:25.122Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/2d/64b26e21183a7ff180105871dd5983a8da539d8768921728268dc6d0a73d/pyqt6_sip-13.11.0-cp314-cp314-win_amd64.whl", hash = "sha256:9bd81cb351640abc803ea2fe7262b5adea28615c9b96fd103d1b6f3459937211", size = 55078, upload-time = "2026-01-13T16:01:29.853Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/36/23f699fa8b1c3fcc312ecd12661a1df6057d92e16d4def2399b59cf7bf22/pyqt6_sip-13.11.0-cp314-cp314-win_arm64.whl", hash = "sha256:cd95ec98f8edb15bcea832b8657809f69d758bc4151cc6fd7790c0181949e45f", size = 49465, upload-time = "2026-01-13T16:01:31.174Z" },
 ]
 
 [[package]]
