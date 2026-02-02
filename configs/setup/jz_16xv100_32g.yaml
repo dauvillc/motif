@@ -8,6 +8,7 @@ setup:
   slurm_nodes: 4
   slurm_ntasks_per_node: ${trainer.devices}
   slurm_gres: "gpu:4"
+  slurm_constraint: "v100-32g"
   name: ${wandb.name}
   slurm_account: "xyw@v100"
   slurm_signal_delay_s: 120
