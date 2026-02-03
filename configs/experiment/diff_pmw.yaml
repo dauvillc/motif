@@ -8,7 +8,6 @@ defaults:
 
 lightning_module:
   patch_size: 4
-  use_det_model_from_run: null
 
 wandb:
   name: diff_pmw
@@ -16,7 +15,8 @@ wandb:
 
 dataset:
   train:
-    dt_max: 6
+    dt_min: -3
+    dt_max: 3
     groups_availability:
       pmw:
         sources: ['pmw']  # Includes all sources of type 'pmw'

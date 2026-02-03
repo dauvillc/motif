@@ -1,7 +1,13 @@
 tc_primed:
+  era5:
+    variables: ['pressure_msl', 'u_wind_10m', 'v_wind_10m', 'sst', 'dist_to_center']
+    input_only: ['sst']
+    output_only: ['dist_to_center']
   pmw:
     AMSR2_GCOMW1:
         variables: ['TB_36.5H', 'TB_36.5V', 'TB_A89.0H', 'TB_A89.0V']
+    GMI_GPM:
+        variables: ['TB_36.64H', 'TB_36.64V', 'TB_89.0H', 'TB_89.0V']
     TMI_TRMM:
         variables: ['TB_37.0H', 'TB_37.0V', 'TB_85.5H', 'TB_85.5V']
     SSMI_F11:
@@ -20,6 +26,13 @@ tc_primed:
         variables: ['TB_37.0H', 'TB_37.0V', 'TB_91.665H', 'TB_91.665V']
     SSMIS_F19:
         variables: ['TB_37.0H', 'TB_37.0V', 'TB_91.665H', 'TB_91.665V']
-  radar:
-    GMI_GPM:
-      variables: ['nearSurfPrecipTotRate']
+  ir:
+    tcirar:
+        variables: ['IRWIN']
+    hursat:
+        variables: ['IRWIN']
+sar:
+  cband:
+    variables: ['wind_speed']
+    
+

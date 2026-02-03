@@ -22,9 +22,8 @@ from motif.data.utils import (
 def precompute_samples(
     ref_df,
     df,
+    dt_min,
     dt_max,
-    forecast_lead_time,
-    forecast_sources,
     select_most_recent,
     verbose=True,
 ):
@@ -36,9 +35,8 @@ def precompute_samples(
     Args:
         ref_df (pd.DataFrame): The reference dataframe.
         df (pd.DataFrame): DataFrame containing all samples.
+        dt_min (int): The minimum time delta.
         dt_max (int): The maximum time delta.
-        forecast_lead_time (int): The forecast lead time.
-        forecast_sources (list): The list of forecasting sources.
         select_most_recent (bool): Whether to select the most recent observation.
         verbose (bool): Whether to print progress messages.
 
@@ -53,17 +51,10 @@ def precompute_samples(
         sid, t0 = row["sid"], row["time"]
         sample_df = df[df["sid"] == sid]
         # Only keep the rows where the time is within the time window
-        # defined by the reference time t0.
-        min_t = t0 - forecast_lead_time - dt_max
-        max_t = t0 - forecast_lead_time
+        # defined by the reference time t0 and dt_min, dt_max
+        min_t = t0 + dt_min
+        max_t = t0 + dt_max
         time_mask = (sample_df["time"] <= max_t) & (sample_df["time"] > min_t)
-        # For the forecast sources, we also keep the rows where the time is
-        # exactly the forecast time.
-        if forecast_sources:
-            forecast_mask = (sample_df["source_name"].isin(forecast_sources)) & (
-                sample_df["time"] == t0
-            )
-            time_mask = time_mask | forecast_mask
         sample_df = sample_df[time_mask]
 
         # If we're selecting the sources chronologically, we can pre-compute the sorted order.
@@ -76,12 +67,18 @@ def precompute_samples(
 
 class MultiSourceDataset(torch.utils.data.Dataset):
     """A dataset that yields elements from multiple sources.
+
+    For a given storm S and reference time t0, the dataset will yield observations of S
+    that fall within the time window [t0 + dt_min, t0 + dt_max].
+    The observations come from multiple sources, and for each source, multiple
+    observations can be included in a sample.
+
     A sample from the dataset is a dict {(source_name, index): data} where
     source_name is the name of the source and index is an integer representing
     the observation index (0 = most recent, 1 = second most recent, etc.).
     Each data dict contains the following key-value pairs:
     - "dt" is a scalar tensor of shape (1,) containing the time delta between the reference time
-        and the element's time, normalized by dt_max.
+        and the observation time, normalized by the length of the time window.
     - "characs" is a tensor of shape (n_charac_vars,) containing the source characteristics.
         Each data variable within a source has its own charac variables, which are all
         concatenated into a single tensor.
@@ -90,10 +87,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
     - "dist_to_center" is a tensor of shape (H, W) containing the distance
         to the center of the storm.
     - "values" is a tensor of shape (n_variables, H, W) containing the variables for the source.
-
-    For a given storm S and reference time t0, the dataset will yield observations from
-    the sources that are available in the time window (t0 - dt_max, t0) for each source.
-    Multiple observations from the same source can be available in that time window.
     """
 
     def __init__(
@@ -101,20 +94,17 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         dataset_dir,
         split,
         included_variables_dict,
-        dt_max=24,
+        dt_min,
+        dt_max,
+        dt_min_norm=None,
         dt_max_norm=None,
         groups_availability={},
         select_most_recent=False,
         min_ref_time_delta=0,
         num_workers=0,
-        forecasting_lead_time=None,
-        forecasting_sources=None,
-        min_tc_intensity=None,
-        mask_spatial_coords=[],
         data_augmentation=None,
         limit_samples=None,
         seed=42,
-        **unused_kwargs,
     ):
         """
         Args:
@@ -138,10 +128,14 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 containing the variables (i.e. channels) to include for each source.
                 Variables also included in the second list will be included in the yielded
                 data but will be flagged as input-only in the Source object.
-            dt_max (int): The maximum time delta between the elements returned for each source,
-                in hours.
-            dt_max_norm (int): If not None, the value to use for normalizing the time delta.
-                If None, will use dt_max.
+            dt_min (int): The minimum time delta (in hours) between the reference time
+                and the observation time.
+            dt_max (int): The maximum time delta (in hours) between the reference time
+                and the observation time.
+            dt_min_norm (int or None): The minimum time delta (in hours) used for
+                normalizing the time delta. If None, dt_min is used.
+            dt_max_norm (int or None): The maximum time delta (in hours) used for
+                normalizing the time delta. If None, dt_max is used.
             groups_availability (Dict of str to dict): Dict defining groups of sources.
                 For each group, a minimum and a maximum number of sources from that group
                 can be set, which will be used to filter the samples.
@@ -166,19 +160,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             min_ref_time_delta (int): The minimum time delta between two reference times
                 of the same storm (ie between two samples of the same storm).
             num_workers (int): If > 1, number of workers to use for parallel loading of the data.
-            forecasting_lead_time (int): If not None, the lead time to use for forecasting.
-                Must be used in conjunction with forecasting_sources. If enabled, the reference
-                source will always be one of the forecast source.
-                The time window for the other sources
-                will be (t0 - lead_time - dt_max, t0 - lead_time), i.e. the other sources will be
-                in a window of duration dt_max, ending at t0 - lead_time.
-            forecasting_sources (list of str): If not None, the name of the sources to use
-                for forecasting.
-                Must be used in conjunction with forecasting_lead_time.
-            min_tc_intensity (float): If not None, will filter the reference samples to only keep
-                the ones where the TC intensity is above the given threshold at the reference time.
-            mask_spatial_coords (list of str): If not None, names of sources whose spatial
-                coordinates will be masked (set to zeros).
             data_augmentation (None or MultiSourceDataAugmentation): If not None, instance
                 of MultiSourceDataAugmentation to apply to the data.
             limit_samples (int or float or None): If not None, limits the number of samples in
@@ -195,7 +176,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         self.groups_availability = groups_availability
         self.min_ref_time_delta = min_ref_time_delta
         self.select_most_recent = select_most_recent
-        self.mask_spatial_coords = mask_spatial_coords
         self.data_augmentation = data_augmentation
         self.rng = np.random.default_rng(seed)
 
@@ -241,27 +221,18 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         if len(self.df) == 0:
             raise ValueError("No samples found for the given sources.")
 
-        if forecasting_lead_time is not None:
-            if not forecasting_sources:
-                raise ValueError("forecasting_lead_time must be used with forecasting_sources.")
-            if not isinstance(forecasting_sources, list):
-                forecasting_sources = [forecasting_sources]
-            self.forecasting_lead_time = pd.Timedelta(forecasting_lead_time, unit="h")
-            self.forecasting_sources = [s for s in forecasting_sources if s in source_names]
-            if len(self.forecasting_sources) == 0:
-                raise ValueError("None of the forecasting_sources are in the dataset sources.")
-            print("Forecasting sources: ", self.forecasting_sources)
-            print("Forecasting lead time: ", self.forecasting_lead_time)
-        else:
-            self.forecasting_lead_time = pd.Timedelta(0, unit="h")
-            self.forecasting_sources = None
-
         # Time delta settings
+        self.dt_min = pd.Timedelta(dt_min, unit="h")
         self.dt_max = pd.Timedelta(dt_max, unit="h")
-        if dt_max_norm is not None:
-            self.dt_max_norm = pd.Timedelta(dt_max_norm, unit="h")
+        if dt_min_norm is None:
+            self.dt_min_norm = self.dt_min
         else:
-            self.dt_max_norm = self.dt_max + self.forecasting_lead_time
+            self.dt_min_norm = pd.Timedelta(dt_min_norm, unit="h")
+        if dt_max_norm is None:
+            self.dt_max_norm = self.dt_max
+        else:
+            self.dt_max_norm = pd.Timedelta(dt_max_norm, unit="h")
+        self.dt_norm = self.dt_max_norm - self.dt_min_norm
 
         # ========================================================================================
         # BUILDING THE REFERENCE DATAFRAME
@@ -269,7 +240,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # D[i, s] = 1 if source i is available for sample s, and 0 otherwise.
         print(f"{split}: Computing sources availability...")
         available_sources = compute_sources_availability(
-            self.df, self.dt_max, lead_time=self.forecasting_lead_time, num_workers=num_workers
+            self.df, self.dt_min, self.dt_max, num_workers=num_workers
         )
         # We can now build the reference dataframe:
         # - self.df contains the metadata for all elements from all sources,
@@ -313,21 +284,9 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         self.reference_df = self.df[mask][["sid", "time", "source_name", "intensity"]]
         self.reference_df["n_available_sources"] = available_sources_count[mask]
 
-        # If forecasting, only use the forecast sources as references
-        if self.forecasting_sources is not None:
-            self.reference_df = self.reference_df[
-                self.reference_df["source_name"].isin(self.forecasting_sources)
-            ]
-
         # Avoid duplicated samples if two observations are at the exact same time
         self.reference_df = self.reference_df.drop_duplicates(["sid", "time"])
         self.reference_df = self.reference_df.reset_index(drop=True)
-
-        # Optional intensity filtering
-        if min_tc_intensity is not None:
-            self.reference_df = self.reference_df[
-                self.reference_df["intensity"] >= min_tc_intensity
-            ]
 
         # If required, sample the reference dataframe to keep only one sample
         # every min_ref_time_delta hours.
@@ -367,9 +326,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             self.samples = precompute_samples(
                 self.reference_df,
                 self.df,
+                self.dt_min,
                 self.dt_max,
-                self.forecasting_lead_time,
-                self.forecasting_sources,
                 self.select_most_recent,
             )
         else:
@@ -380,9 +338,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                     precompute_samples,
                     chunks,
                     [self.df] * len(chunks),
+                    [self.dt_min] * len(chunks),
                     [self.dt_max] * len(chunks),
-                    [self.forecasting_lead_time] * len(chunks),
-                    [self.forecasting_sources] * len(chunks),
                     [self.select_most_recent] * len(chunks),
                     [True] + [False] * (len(chunks) - 1),  # only the first chunk is verbose
                 )
@@ -473,10 +430,11 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             source_name = row["source_name"]
             source = self.sources_dict[source_name]
 
+            # Retrieve the time delta and normalize it
             time = row["time"]
-            dt = t0 - self.forecasting_lead_time - time
+            dt = time - t0
             DT = torch.tensor(
-                dt.total_seconds() / self.dt_max_norm.total_seconds(),
+                (dt - self.dt_min_norm).total_seconds() / self.dt_norm.total_seconds(),
                 dtype=torch.float32,
             )
 
@@ -493,11 +451,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 # Load the land mask and distance to the center of the storm
                 LM = torch.tensor(load_nc_with_nan(ds["land_mask"]), dtype=torch.float32)
                 D = torch.tensor(load_nc_with_nan(ds["dist_to_center"]), dtype=torch.float32)
-                # If the spatial coordinates should be masked, set them to zeros
-                if source_name in self.mask_spatial_coords:
-                    C = torch.zeros_like(C)
-                    LM = torch.zeros_like(LM)
-                    D = torch.zeros_like(D)
 
                 # Characterstic variables
                 if source.n_charac_variables() == 0:

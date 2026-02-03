@@ -1,0 +1,35 @@
+defaults:
+  - paths: ???
+  - wandb: default
+  - sources: era5_pmw_ir_sar
+  - dataset: default
+  - data_augmentation: none
+  - _self_
+
+dataloader:
+  num_workers: 10
+
+dataset:
+  train:
+    dt_min: -3
+    dt_max: 3
+    groups_availability:
+      era5:
+        sources:
+          - tc_primed_era5
+        # Min, max number of sources from the group
+        availability: [1, 2]
+      pmw:
+        sources:
+          - pmw  # All PMW sources grouped together
+        availability: [1, 2]
+      ir:
+        sources:
+          - infrared  # All IR sources grouped together
+        availability: [1, 1]
+      sar:
+        sources:
+          - sar  # All SAR sources grouped together
+        availability: [1, 1]
+
+seed: 42

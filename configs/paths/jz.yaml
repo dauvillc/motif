@@ -1,8 +1,7 @@
 # Path to where the unpreprocessed datasets are stored
 raw_datasets: ${oc.env:WORK}/data/motif/raw/
 # Path to where the preprocessed dataset will be saved
-preprocessed_dataset: ${oc.env:SCRATCH}/data/motif/preprocessed_pmw_concat/
-preprocessed_dataset_regular: ${oc.env:SCRATCH}/data/motif/preprocessed_pmw_concat_regular/
+preprocessed_dataset: ${oc.env:SCRATCH}/data/motif/preprocessed/
 # Checkpoints directory
 checkpoints: ${oc.env:SCRATCH}/checkpoints/
 

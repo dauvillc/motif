@@ -15,13 +15,9 @@ dataset:
         # Min, max number of sources from the group
         availability: [2, null]
     select_most_recent: true
-    forecasting_sources: null
-    forecasting_lead_time: null
   test:
     dt_max: ${dataset.val.dt_max}
     min_ref_time_delta: ${dataset.val.min_ref_time_delta}
     groups_availability: ${dataset.val.groups_availability}
     select_most_recent: ${dataset.val.select_most_recent}
-    forecasting_sources: ${dataset.val.forecasting_sources}
-    forecasting_lead_time: ${dataset.val.forecasting_lead_time}
 
