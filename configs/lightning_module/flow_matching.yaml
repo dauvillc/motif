@@ -1,7 +1,6 @@
 _target_: motif.lightning_module.flow_matching.MultisourceFlowMatchingReconstructor
 patch_size: 4
-values_dim: ${model.values_dim}
-coords_dim: ${model.coords_dim}
+dim: ${model.dim}
 cond_dim: ${model.cond_dim}
 n_sources_to_mask: 1
 n_sampling_diffusion_steps: 25
@@ -16,5 +15,3 @@ cfg_train_uncond_proba: 0.0
 training_time_sampling: lognormal
 
 backbone: ${model.backbone}
-output_resnet_channels: ${model.output_resnet_channels}
-output_resnet_blocks: ${model.output_resnet_blocks}

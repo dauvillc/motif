@@ -4,7 +4,7 @@ defaults:
   - override /lightning_module: flow_matching
   - override /lr_scheduler: cosine_warmup_150epochs
   - override /metrics: none
-  - override /model: motif_ds_12b_d384
+  - override /model: motif_12b_d512
 
 lightning_module:
   patch_size: 4

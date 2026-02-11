@@ -4,12 +4,15 @@ import math
 
 import torch
 import torch.nn as nn
+from torch import Tensor
+
+from motif.datatypes import SourceData, SourceEmbedding
 
 
 class LinearEmbedding(nn.Module):
     """Embeds a vector using a linear layer."""
 
-    def __init__(self, input_dim, output_dim, n_layers=1, norm=False):
+    def __init__(self, input_dim: int, output_dim: int, n_layers: int = 1, norm: bool = False):
         super(LinearEmbedding, self).__init__()
         if n_layers > 1:
             layers = []
@@ -24,7 +27,7 @@ class LinearEmbedding(nn.Module):
         if norm:
             self.ln = nn.LayerNorm(output_dim)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = self.embedding(x)
         x = self.act(x)
         if self.use_norm:
@@ -32,68 +35,21 @@ class LinearEmbedding(nn.Module):
         return x
 
 
-class CornerAndCenterEmbedding2d(nn.Module):
-    """Isolates the corner and center pixels of a 2D input tensor, and embeds them
-    using a linear layer.
-    """
-
-    def __init__(self, channels, emb_dim, norm=True):
-        """
-        Args:
-            channels (int): Number of channels in the input tensor.
-            emb_dim (int): Dimension of the embedding space.
-            norm (bool): Whether to apply layer normalization after the embedding.
-        """
-        super().__init__()
-        self.channels = channels
-        self.emb_dim = emb_dim
-        self.embedding = nn.Linear(5 * channels, emb_dim)
-        self.act = nn.GELU()
-        if norm:
-            self.ln = nn.LayerNorm(emb_dim)
-
-    def forward(self, x):
-        """
-        Args:
-            x (torch.Tensor): A tensor of shape (B, C, H, W).
-        Returns:
-            embedded: torch.Tensor of shape (B, emb_dim).
-        """
-        B, C, H, W = x.shape
-        if C != self.channels:
-            raise ValueError(f"Expected input with {self.channels} channels, got {C}.")
-        if H < 3 or W < 3:
-            raise ValueError("Input height and width must be at least 3.")
-        corners_and_center = torch.cat(
-            [
-                x[:, :, 0, 0],  # top-left
-                x[:, :, 0, -1],  # top-right
-                x[:, :, -1, 0],  # bottom-left
-                x[:, :, -1, -1],  # bottom-right
-                x[:, :, H // 2, W // 2],  # center
-            ],
-            dim=1,
-        )  # (B, 5*C)
-        embedded = self.embedding(corners_and_center)  # (B, emb_dim)
-        embedded = self.act(embedded)
-        if hasattr(self, "ln"):
-            embedded = self.ln(embedded)
-        return embedded
-
-
 class ConvPatchEmbedding2d(nn.Module):
     """A module that embeds an image into a sequence of patches using
     a 2D convolutional layer.
     """
 
-    def __init__(self, channels, patch_size, emb_dim, mlp_layers=0, norm=True):
+    def __init__(
+        self, channels: int, patch_size: int, emb_dim: int, mlp_layers: int = 0, norm: bool = True
+    ):
         """
         Args:
-            channels (int): The number of channels in the image.
-            patch_size (int): The size of the patches.
-            emb_dim (int): The dimension of the embedding space.
-            mlp_layers (int): The number of linear layers to apply after the convolution.
-            norm (bool): Whether to apply layer normalization after the embedding.
+            channels: The number of channels in the image.
+            patch_size: The size of the patches.
+            emb_dim: The dimension of the embedding space.
+            mlp_layers: The number of linear layers to apply after the convolution.
+            norm: Whether to apply layer normalization after the embedding.
         """
         super().__init__()
         self.patch_size = patch_size
@@ -111,12 +67,12 @@ class ConvPatchEmbedding2d(nn.Module):
         if norm:
             self.norm = nn.LayerNorm(emb_dim)
 
-    def forward(self, image):
+    def forward(self, image: Tensor) -> Tensor:
         """
         Args:
-            image (torch.Tensor): A tensor of shape (B, C, H, W) containing the image.
+            image: A tensor of shape (B, C, H, W) containing the image.
         Returns:
-            embedded_image: torch.Tensor of shape (B, h, w, emb_dim).
+            embedded_image: Tensor of shape (B, h, w, emb_dim).
         """
         # Compute padding dynamically
         H, W = image.shape[2:]
@@ -142,19 +98,19 @@ class SinusoidalEmbedding(nn.Module):
     Based on the standard transformer position embedding.
     """
 
-    def __init__(self, dim, max_period=10000):
+    def __init__(self, dim: int, max_period: int = 10000):
         super().__init__()
         if dim % 2 != 0:
             raise ValueError("Embedding dimension must be even.")
         self.dim = dim
         self.max_period = max_period
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x (torch.Tensor): Tensor of shape (..., C) or (..., C, 1) containing the input values.
+            x: Tensor of shape (..., C) or (..., C, 1).
         Returns:
-            torch.Tensor: Tensor of shape (..., C, fourier_dim) containing sinusoidal embeddings.
+            Tensor of shape (..., C, fourier_dim) containing sinusoidal embeddings.
         """
         if x.size(-1) > 1:
             x = x.unsqueeze(-1)  # (..., C, 1)
@@ -176,32 +132,58 @@ class SpatioTemporalFourierCoordinateEmbedding(nn.Module):
     and a projection MLP.
     """
 
-    def __init__(self, fourier_dim):
+    def __init__(self, fourier_dim: int):
         """
         Args:
-            fourier_dim (int): Dimension of the Fourier features for both spatial
+            fourier_dim: Dimension of the Fourier features for both spatial
                 and temporal embeddings.
         """
         super().__init__()
         self.embedder = SinusoidalEmbedding(fourier_dim)
 
-    def forward(self, coords, times):
+    def forward(self, coords: Tensor, times: Tensor) -> Tensor:
         """
         Args:
-            coords (torch.Tensor): Tensor of shape (B, 2, H, W) containing lat/lon at each pixel.
-            times (torch.Tensor): Tensor of shape (B,) containing time values.
+            coords: Tensor of shape (B, 2, H, W) containing lat/lon at each pixel.
+            times: Tensor of shape (B,).
         Returns:
-            torch.Tensor: Tensor of shape (B, 3 * F, H, W) containing the embedded coordinates
-                where F is the fourier_dim.
+            Tensor: Tensor of shape (B, 3 * F, H, W) where F is the fourier_dim.
         """
         B, _, H, W = coords.shape
         lat_lon = coords.permute(0, 2, 3, 1).reshape(B * H * W, 2)  # (B*H*W, 2)
         times = times.view(B, 1).expand(B, H * W).reshape(B * H * W, 1)  # (B*H*W, 1)
         full_coords = torch.cat([lat_lon, times], dim=1)  # (B*H*W, 3)
-        fourier_coords = self.embedder(full_coords)  # (B*H*W, 3, fourier_dim)
+
+        fourier_coords: Tensor = self.embedder(full_coords)  # (B*H*W, 3, fourier_dim)
         fourier_coords = fourier_coords.view(B, H, W, 3 * fourier_coords.size(-1))
         fourier_coords = fourier_coords.permute(0, 3, 1, 2)  # (B, 3*fourier_dim, H, W)
+
         return fourier_coords
+
+
+class AvgPoolCoordinateEmbedding(nn.Module):
+    """
+    Embeds spatio-temporal coordinates (latitude, longitude, time) using average pooling.
+    """
+
+    def __init__(self, patch_size: int):
+        super().__init__()
+        self.pool = nn.AvgPool2d(kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, coords: Tensor, times: Tensor) -> Tensor:
+        """
+        Args:
+            coords: Tensor of shape (B, 2, H, W) containing lat/lon at each pixel.
+            times: Tensor of shape (B,).
+        Returns:
+            Tensor: Tensor of shape (B, h, w, 3) containing embedded coordinates.
+        """
+        embedded_coords = self.pool(coords)  # (B, 2, h, w)
+        B, _, h, w = embedded_coords.shape
+        times = times.view(B, 1, 1, 1).expand(B, 1, h, w)  # (B, 1, h, w)
+        embedded_coords = torch.cat([embedded_coords, times], dim=1)  # (B, 3, h, w)
+        embedded_coords = embedded_coords.permute(0, 2, 3, 1)  # (B, h, w, 3)
+        return embedded_coords
 
 
 class SourcetypeEmbedding2d(nn.Module):
@@ -210,7 +192,8 @@ class SourcetypeEmbedding2d(nn.Module):
 
     This module handles both coordinate embeddings (latitude, longitude,
     and time) and values embeddings (channels, masks, diffusion timestep),
-    then outputs their embedded representations.
+    and returns a set of embedded vectors.
+
     Additionally, a conditioning tensor is computed that embeds the conditioning
     that isn't the values or the spatio-temporal coordinates. This includes:
     - The characteristic variables.
@@ -220,40 +203,42 @@ class SourcetypeEmbedding2d(nn.Module):
 
     def __init__(
         self,
-        channels,
-        patch_size,
-        values_dim,
-        coords_dim,
-        cond_dim,
-        dff_step_fourier_dim=256,
-        coords_fourier_dim=64,
-        n_charac_vars=0,
-        use_diffusion_t=True,
-        pred_mean_channels=0,
-        conditioning_mlp_layers=0,
-        coords_corner_and_center_embedding=False,
+        channels: int,
+        patch_size: int,
+        dim: int,
+        cond_dim: int,
+        dff_step_fourier_dim: int = 256,
+        n_charac_vars: int = 0,
+        use_diffusion_t: bool = True,
+        pred_mean_channels: int = 0,
+        conditioning_mlp_layers: int = 0,
+        coords_encoding_method: str = "fourier",
+        coords_fourier_dim: int = 64,
+        coords_dim: int | None = None,
     ):
         """
         Args:
-            channels (int): Number of channels for the source data, excluding
+            channels: Number of channels for the source data, excluding
                 land-sea and availability masks.
-            patch_size (int): Size of the patches to be used for convolution.
-            values_dim (int): Dimension of the values embedding space.
-            coords_dim (int): Dimension of the coordinate embedding space.
-            cond_dim (int): Dimension of the conditioning embedding space.
-            dff_step_fourier_dim (int): Dimension of the Fourier features for
+            patch_size: Size of the patches to be used for convolution.
+            dim: Dimension of the embedding space.
+            cond_dim: Dimension of the conditioning embedding space.
+            dff_step_fourier_dim: Dimension of the Fourier features for
                 the diffusion timestep embedding.
-            coords_fourier_dim (int): Dimension of the Fourier features for
-                the spatio-temporal coordinates.
-            n_charac_vars (int): Number of optional characteristic variables.
-            use_diffusion_t (bool): Whether to include a diffusion timestep embedding.
-            pred_mean_channels (int): Number of channels for the predicted mean. If zero,
+            n_charac_vars: Number of optional characteristic variables.
+            use_diffusion_t: Whether to include a diffusion timestep embedding.
+            pred_mean_channels: Number of channels for the predicted mean. If zero,
                 the predicted mean is not used.
-            conditioning_mlp_layers (int): Number of linear layers to apply
+            conditioning_mlp_layers: Number of linear layers to apply
                 after the conditioning concatenation.
-            coords_corner_and_center_embedding (bool): Whether to use a corner-and-center
-                embedding for the coordinates instead of a patch embedding. Serves as a
-                baseline for ablation studies.
+            coords_encoding_method: Method to encode the spatio-temporal coordinates.
+                Options:
+                    - "fourier": Use Fourier features as in the original DiT.
+                    - "avg_pool": Use average pooling to embed the coordinates.
+            coords_fourier_dim (int, optional): Dimension of the Fourier features
+                if coords_encoding_method is "fourier".
+            coords_dim (int, optional): Dimension of the coordinate embedding if
+                coords_encoding_method is "fourier".
         """
         super().__init__()
 
@@ -264,23 +249,22 @@ class SourcetypeEmbedding2d(nn.Module):
 
         # landmask + availability mask + predicted mean
         ch = channels + 2 + pred_mean_channels
-        self.values_embedding = ConvPatchEmbedding2d(ch, patch_size, values_dim, norm=True)
+        self.values_embedding = ConvPatchEmbedding2d(ch, patch_size, dim, norm=True)
 
         # Coords embedding layers
-        self.coords_emb_dim = coords_dim
-        # - Fourier embedding
-        self.coords_fourier_embedder = SpatioTemporalFourierCoordinateEmbedding(coords_fourier_dim)
-        # - ViT patch embedding or corner-and-center embedding
-        if coords_corner_and_center_embedding:
-            self.coords_embedding = CornerAndCenterEmbedding2d(
-                coords_fourier_dim * 3, coords_dim, norm=False
+        self.coords_patch_size = patch_size
+        self.coords_encoding_method = coords_encoding_method
+        if coords_encoding_method == "fourier":
+            if coords_dim is None:
+                raise ValueError("coords_dim must be specified if using fourier encoding.")
+            self.coords_fourier_embedder = SpatioTemporalFourierCoordinateEmbedding(
+                coords_fourier_dim
+            )
+            self.coords_embedding = ConvPatchEmbedding2d(
+                coords_fourier_dim * 3, patch_size, coords_dim, norm=True
             )
         else:
-            self.coords_patch_size = patch_size
-            self.coords_embedding = ConvPatchEmbedding2d(
-                coords_fourier_dim * 3, patch_size, coords_dim, norm=False
-            )
-        self.coords_norm = nn.LayerNorm(coords_dim)
+            self.coords_embedding = AvgPoolCoordinateEmbedding(patch_size)
 
         # Conditioning embedding layers
         # - spatial conditioning
@@ -302,7 +286,7 @@ class SourcetypeEmbedding2d(nn.Module):
         if self.use_diffusion_t:
             self.time_embedder = SinusoidalEmbedding(dff_step_fourier_dim)
             # 2. MLP to project it to the conditioning dimension
-            self.time_mlp = nn.Sequential(
+            self.diff_step_mlp = nn.Sequential(
                 nn.Linear(dff_step_fourier_dim, cond_dim),
                 nn.SiLU(),  # Swish (SiLU) is standard for time embeddings
                 nn.Linear(cond_dim, cond_dim),
@@ -310,7 +294,7 @@ class SourcetypeEmbedding2d(nn.Module):
         # final layer normalization for the conditioning
         self.cond_norm = nn.LayerNorm(cond_dim)
 
-    def forward(self, data):
+    def forward(self, data: SourceData) -> SourceEmbedding:
         """
         Args:
             data (dict): Must contain:
@@ -325,31 +309,35 @@ class SourcetypeEmbedding2d(nn.Module):
                 - Optionally "diffusion_t": (B,) diffusion timestep.
                 - Optionally "pred_mean": (B, C_out, H, W), predicted mean.
         Returns:
-            embedded_values: (B, h, w, values_dim) tensor of embedded values.
-            embedded_coords: (B, h, w, coords_dim) tensor of embedded coordinates.
-            conditioning: (B, h, w, cond_dim) tensor containing the conditioning, or
-                None if no conditioning is given.
+            A SourceEmbedding object containing:
+                - embedding: (B, h, w, dim) tensor
+                - coords: (B, h, w, coords_dim) tensor. The coords_dim is:
+                    - 3 if using the AvgPoolCoordinateEmbedding (lat, lon, time).
+                    - dim if using fourier features.
+                - conditioning: (B, h, w, cond_dim) tensor or None.
         """
 
         # Embed values
         with torch.backends.cudnn.flags(enabled=self.values_patch_size <= 4):
             values_tensors = []
-            values = data["values"]
-            avail_mask = data["avail_mask"].unsqueeze(1)
-            landmask = data["landmask"].unsqueeze(1)
+            values = data.values
+            avail_mask = data.avail_mask.unsqueeze(1)
+            landmask = data.landmask.unsqueeze(1)
             values_tensors = [values, avail_mask, landmask]
-            if self.use_predicted_mean:
-                values_tensors.append(data["pred_mean"])
+            if self.use_predicted_mean and data.pred_mean is not None:
+                values_tensors.append(data.pred_mean)
             values = torch.cat(values_tensors, dim=1)  # (B, C, H, W)
             embedded_values = self.values_embedding(values)
 
         # Embed coords
-        coords = data["coords"]  # (B, 2, H, W)
-        dt = data["dt"]  # (B,)
-        fourier_coords = self.coords_fourier_embedder(coords, dt)  # (B, 3*F, H, W)
-        with torch.backends.cudnn.flags(enabled=self.values_patch_size <= 4):
-            embedded_coords = self.coords_embedding(fourier_coords)  # (B, h, w, coords_dim)
-        embedded_coords = self.coords_norm(embedded_coords)
+        coords = data.coords  # (B, 2, H, W)
+        dt = data.dt  # (B,)
+        if self.coords_encoding_method == "fourier":
+            fourier_coords = self.coords_fourier_embedder(coords, dt)  # (B, 3*F, H, W)
+            with torch.backends.cudnn.flags(enabled=self.values_patch_size <= 4):
+                embedded_coords = self.coords_embedding(fourier_coords)  # (B, h, w, dim)
+        else:
+            embedded_coords = self.coords_embedding(coords, dt)  # (B, h, w, 3)
 
         # Conditioning tensor
         available_conditioning = []
@@ -362,22 +350,24 @@ class SourcetypeEmbedding2d(nn.Module):
         # and embed them with a single linear embedding.
         conds = []
         # - Availability flag (always used)
-        conds.append(data["avail"].float().view(-1, 1))  # (B, 1)
+        conds.append(data.avail.float().view(-1, 1))  # (B, 1)
         # - Characteristic variables
-        if "characs" in data and data["characs"] is not None:
-            conds.append(data["characs"])  # (B, n_characs_vars)
+        if data.characs is not None:
+            conds.append(data.characs)  # (B, n_characs_vars)
         # Concatenate the conditioning tensors
         conds = torch.cat(conds, dim=1)  # (B, ch_cond)
-        conds = self.cond_embedding(conds)  # (B, values_dim)
+        conds = self.cond_embedding(conds)  # (B, cond_dim)
         # Reshape to sum to the spatial dimensions
         conds = conds.view(b, 1, 1, -1)
         available_conditioning.append(conds)
         # - Diffusion timestep (if used)
         if self.use_diffusion_t:
-            diffusion_t = data["diffusion_t"]  # (B,)
+            if data.diffusion_t is None:
+                raise ValueError("diffusion_t must be provided if use_diffusion_t is True.")
+            diffusion_t = data.diffusion_t  # (B,)
             # Embed the diffusion timestep with a sinusoidal embedding + MLP
             diffusion_t_emb = self.time_embedder(diffusion_t)  # (B, time_emb_dim)
-            diffusion_t_emb = self.time_mlp(diffusion_t_emb)  # (B, cond_dim)
+            diffusion_t_emb = self.diff_step_mlp(diffusion_t_emb)  # (B, cond_dim)
             # Reshape to sum to the spatial dimensions
             diffusion_t_emb = diffusion_t_emb.view(b, 1, 1, -1)
             available_conditioning.append(diffusion_t_emb)
@@ -389,4 +379,6 @@ class SourcetypeEmbedding2d(nn.Module):
         else:
             conditioning = None
 
-        return embedded_values, embedded_coords, conditioning
+        return SourceEmbedding(
+            embedding=embedded_values, coords=embedded_coords, conditioning=conditioning
+        )

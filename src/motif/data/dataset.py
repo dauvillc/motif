@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,22 +12,24 @@ import torch
 from netCDF4 import Dataset
 from tqdm import tqdm
 
+from motif.data.data_aug import MultisourceDataAugmentation
 from motif.data.grid_functions import crop_nan_border
 from motif.data.source import Source
 from motif.data.utils import (
     compute_sources_availability,
     load_nc_with_nan,
 )
+from motif.datatypes import RawSourceData, SourceIndex
 
 
 def precompute_samples(
-    ref_df,
-    df,
-    dt_min,
-    dt_max,
-    select_most_recent,
-    verbose=True,
-):
+    ref_df: pd.DataFrame,
+    df: pd.DataFrame,
+    dt_min: pd.Timedelta,
+    dt_max: pd.Timedelta,
+    select_most_recent: bool,
+    verbose: bool = True,
+) -> list[Tuple[pd.Timestamp, pd.DataFrame]]:
     """Precomputes the samples for a (subset of the) dataframe of
     reference samples.
     Written outside the MotifDataset class so that it can be
@@ -91,20 +94,20 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        dataset_dir,
-        split,
-        included_variables_dict,
-        dt_min,
-        dt_max,
-        dt_min_norm=None,
-        dt_max_norm=None,
-        groups_availability={},
-        select_most_recent=False,
-        min_ref_time_delta=0,
-        num_workers=0,
-        data_augmentation=None,
-        limit_samples=None,
-        seed=42,
+        dataset_dir: str,
+        split: str,
+        included_variables_dict: dict,
+        dt_min: int,
+        dt_max: int,
+        dt_min_norm: int | None = None,
+        dt_max_norm: int | None = None,
+        groups_availability: dict = {},
+        select_most_recent: bool = False,
+        min_ref_time_delta: int = 0,
+        num_workers: int = 0,
+        data_augmentation: MultisourceDataAugmentation | None = None,
+        limit_samples: int | float | None = None,
+        seed: int = 42,
     ):
         """
         Args:
@@ -199,7 +202,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             source: included_variables_dict[source] for source in sources_metadata
         }
 
-        self.sources, self.sources_dict = [], {}
+        self.sources: List[Source] = []
+        self.sources_dict: Dict[str, Source] = {}
         for source_name, (all_vars, input_only, output_only) in self.variables_dict.items():
             # Update the source metadata with the included variables
             sources_metadata[source_name]["data_vars"] = all_vars
@@ -349,7 +353,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
         # ========================================================================================
         # Load the data means and stds
-        self.data_means, self.data_stds = {}, {}
+        self.data_means: Dict[str, Dict[str, float]] = {}
+        self.data_stds: Dict[str, Dict[str, float]] = {}
         for source in self.sources:
             # Data vars means and stds
             with open(self.constants_dir / source.name / "data_means.json", "r") as f:
@@ -360,7 +365,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # Characteristic variables: pre-build the tensors of characteristics for each source,
         # since those do not depend on the sample.
         self.charac_vars_tensors = {}
-        self.charac_vars_min, self.charac_vars_max = defaultdict(list), defaultdict(list)
+        charac_vars_min, charac_vars_max = defaultdict(list), defaultdict(list)
         for source in self.sources:
             charac_vars = source.get_charac_values()
             self.charac_vars_tensors[source.name] = torch.tensor(charac_vars, dtype=torch.float32)
@@ -372,21 +377,19 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 source_characs_min_max = json.load(f)
             # iter_charac_variables() yields the items in the same order as get_charac_values().
             for charac_var_name, data_var_name, _ in source.iter_charac_variables():
-                self.charac_vars_min[source.name].append(
-                    source_characs_min_max[charac_var_name]["min"]
-                )
-                self.charac_vars_max[source.name].append(
-                    source_characs_min_max[charac_var_name]["max"]
-                )
-            # convert to tensors
-            self.charac_vars_min[source.name] = torch.tensor(
-                self.charac_vars_min[source.name], dtype=torch.float32
-            )
-            self.charac_vars_max[source.name] = torch.tensor(
-                self.charac_vars_max[source.name], dtype=torch.float32
-            )
+                charac_vars_min[source.name].append(source_characs_min_max[charac_var_name]["min"])
+                charac_vars_max[source.name].append(source_characs_min_max[charac_var_name]["max"])
+        # convert to tensors
+        self.charac_vars_min: Dict[str, torch.Tensor] = {
+            source_name: torch.tensor(mins, dtype=torch.float32)
+            for source_name, mins in charac_vars_min.items()
+        }
+        self.charac_vars_max: Dict[str, torch.Tensor] = {
+            source_name: torch.tensor(maxs, dtype=torch.float32)
+            for source_name, maxs in charac_vars_max.items()
+        }
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[int, Dict[SourceIndex, RawSourceData]]:
         """Returns the element at the given index.
 
         Args:
@@ -403,7 +406,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # If selecting the sources randomly, we do it here so that if __getitem__(i) is called
         # twice, it may yield different results.
         if not self.select_most_recent:
-            sample_df = sample_df.sample(frac=1, random_state=self.rng.integers(0, 1e6))
+            sample_df = sample_df.sample(frac=1, random_state=int(self.rng.integers(0, 1_000_000)))
 
         # Group availability criterion: if there are too many sources from a given group,
         # we only keep the maximum allowed number of sources from that group.
@@ -463,19 +466,12 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 V = np.stack([load_nc_with_nan(ds[var]) for var in source.data_vars], axis=0)
                 V = torch.tensor(V, dtype=torch.float32)
 
+                # Availability mask: 1 if value is not NaN, -1 otherwise
+                # (We keep 0 to indicate masked values).
+                AM = (~torch.isnan(V)[0]).float() * 2 - 1
+
                 # Normalize the characs and values tensors
                 CA, V = self.normalize(V, source, characs=CA)
-
-                # Assemble the output dict for that source
-                output_source = {
-                    "dt": DT,
-                    "coords": C,
-                    "landmask": LM,
-                    "dist_to_center": D,
-                    "values": V,
-                }
-                if CA is not None:
-                    output_source["characs"] = CA
 
                 if source.dim == 2:
                     # For images only.
@@ -483,14 +479,21 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                     # originally having multiple channels that are not aligned geographically).
                     # Compute how much we can crop them, and apply that cropping to all spatial
                     # tensors to keep the spatial alignment.
-                    V, C = output_source["values"], output_source["coords"]
-                    LM, D = output_source["landmask"], output_source["dist_to_center"]
-                    V, C, LM, D = crop_nan_border(V, [V, C, LM, D])
-                    output_source["values"], output_source["coords"] = V, C
-                    output_source["landmask"], output_source["dist_to_center"] = LM, D
+                    V, C, LM, D, AM = crop_nan_border(V, [V, C, LM, D, AM])
+
+                # Assemble the output dict for that source
+                output_source = RawSourceData(
+                    dt=DT,
+                    coords=C,
+                    landmask=LM,
+                    dist_to_center=D,
+                    values=V,
+                    avail_mask=AM,
+                    characs=CA,  # May be None
+                )
 
                 # Add the processed observation to the list for this source
-                output[(source_name, sources_cnt[source_name])] = output_source
+                output[SourceIndex(source_name, sources_cnt[source_name])] = output_source
                 sources_cnt[source_name] += 1
 
         if len(output) <= 1:
@@ -506,13 +509,13 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
     def normalize(
         self,
-        values,
-        source,
-        characs=None,
-        denormalize=False,
-        leading_dims=0,
-        device=None,
-    ):
+        values: torch.Tensor,
+        source: Source | str,
+        characs: torch.Tensor | None = None,
+        denormalize: bool = False,
+        leading_dims: int = 0,
+        device: torch.device | None = None,
+    ) -> Tuple[torch.Tensor | None, torch.Tensor]:
         """Normalizes the characs and values tensors associated with a given
         source, and optionally a specific data variable.
         Args:
@@ -520,7 +523,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 or (D1, D2, ..., Dn, C, ...) for leading_dims=n, where ... are the spatial dimensions.
             source (Source or str): Source object representing the source, or name
                 of the source.
-            characs (torch.Tensor, optiona): tensor of shape (n_charac_vars,)
+            characs (torch.Tensor, optional): tensor of shape (n_charac_vars,)
                 containing the characteristic variables.
             denormalize (bool, optional): If True, denormalize the characs and values tensors
                 instead of normalizing them.
@@ -530,8 +533,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 if leading_dims=2, the tensor has shape (D1, D2, C, ...), etc.
             device (torch.device, optional): Device to use for the normalization.
         Returns:
-            normalized_characs (torch.Tensor): normalized charac variables.
-            normalized_values (torch.Tensor): normalized values.
+            normalized_characs: normalized charac variables, or None if characs is None.
+            normalized_values: normalized values.
         """
         if isinstance(source, Source):
             source_name = source.name
@@ -578,45 +581,22 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
         return normalized_characs, normalized_values
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.reference_df)
 
-    def _get_source_names(self):
+    def _get_source_names(self) -> List[str]:
         """Returns a list of the source names (before splitting the sources)."""
         return [source.name for source in self.sources]
 
-    def _get_n_sources(self):
+    def _get_n_sources(self) -> int:
         """Returns the number of original sources (before splitting the sources)."""
         return len(self.sources)
 
-    def _get_n_data_variables(self, source_name=None):
-        """Returns either the number of data variables within a source,
-        or a dict {source_name: number of data variables}."""
-        if source_name is not None:
-            return self._get_n_data_variables()[source_name]
-        return {source.name: source.n_data_variables() for source in self.sources}
-
-    def _get_n_charac_variables(self, source_name=None):
-        """Returns either the number of charac variables within a source,
-        or a dict {source_name: number of charac variables}, before splitting the sources.
-        """
-        if source_name is not None:
-            return self._get_n_charac_variables()[source_name]
-        return {
-            # Each data variable within a source has its own charac variables
-            source.name: source.n_charac_variables()
-            for source in self.sources
-        }
-
-    def get_source_names(self):
-        """Returns a list of the source names, including the split sources if needed."""
-        return self.source_names
-
-    def get_n_sources(self):
+    def get_n_sources(self) -> int:
         """Returns the number of sources."""
-        return len(self.get_source_names())
+        return len(self.sources)
 
-    def get_source_types_charac_vars(self):
+    def get_source_types_charac_vars(self) -> Dict[str, List[str]]:
         """Returns a dict {source_type: charac variables}."""
         # Browse all sources and collect their types and charac variables
         source_types_charac_vars = {}
@@ -633,6 +613,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 source_types_charac_vars[source.type] = source.charac_vars
         return source_types_charac_vars
 
-    def get_n_charac_variables(self):
+    def get_n_charac_variables(self) -> Dict[str, int]:
         """Returns a dict {source_name: number of charac variables}."""
-        return self._get_n_charac_variables()
+        return {source.name: source.n_charac_variables() for source in self.sources}

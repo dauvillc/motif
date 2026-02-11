@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from time import localtime, strftime
+from typing import Any, cast
 
 import hydra
 import lightning.pytorch as pl
@@ -14,6 +15,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from motif.data.collate_fn import multi_source_collate_fn
+from motif.utils.callbacks import UnusedParameterChecker
 from motif.utils.cfg_utils import get_random_code
 from motif.utils.checkpoints import load_experiment_cfg_from_checkpoint
 
@@ -101,7 +103,7 @@ class TrainJob(submitit.helpers.Checkpointable):
             # It also allows weights that are in the checkpoint but not in the new lightning
             # module to be ignored.
             # https://discuss.pytorch.org/t/how-to-load-part-of-pre-trained-model/1113/39
-            ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+            ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)  # type: ignore
             former_dict = ckpt["state_dict"]
             # The user can add "+reset_output_layers=true" to the command line to reset the
             # output layers of the model. In this case, the output layers are not loaded from
@@ -143,7 +145,13 @@ class TrainJob(submitit.helpers.Checkpointable):
 
         lr_monitor = LearningRateMonitor()
         model_summary = ModelSummary(max_depth=4)
-        callbacks = [epoch_checkpoint_callback, time_checkpoint_callback, lr_monitor, model_summary]
+        callbacks = [
+            epoch_checkpoint_callback,
+            time_checkpoint_callback,
+            lr_monitor,
+            model_summary,
+            UnusedParameterChecker(),
+        ]
 
         # Create the trainer
         trainer = pl.Trainer(
@@ -160,7 +168,7 @@ class TrainJob(submitit.helpers.Checkpointable):
                 pl_module,
                 train_dataloader,
                 val_dataloader,
-                ckpt_path=checkpoint_path,
+                ckpt_path=checkpoint_path,  # type: ignore
                 weights_only=False,
             )
         else:
@@ -174,9 +182,9 @@ class TrainJob(submitit.helpers.Checkpointable):
         return submitit.helpers.DelayedSubmission(TrainJob(new_cfg))
 
 
-def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
+def _make_executor(cfg: dict[str, Any]) -> submitit.AutoExecutor:
     # Where submitit writes logs/stdout/err and its internal state
-    folder = Path("submitit") / (
+    folder: Path = Path("submitit") / (
         cfg["wandb"]["name"] + f"_{strftime('%Y%m%d_%H-%M-%S', localtime())}"
     )
     folder.mkdir(parents=True, exist_ok=True)
@@ -187,13 +195,13 @@ def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
-def main(cfg: DictConfig):
+def main(raw_cfg: DictConfig):
     # Enable the full errors in Hydra
     os.environ["HYDRA_FULL_ERROR"] = "1"
 
     OmegaConf.register_new_resolver("eval", eval)
     OmegaConf.register_new_resolver("nan", lambda: float("nan"))
-    cfg = OmegaConf.to_object(cfg)
+    cfg = cast(dict[str, Any], OmegaConf.to_object(raw_cfg))
 
     # Create the job object and submit it to the auto executor.
     job = TrainJob(cfg)

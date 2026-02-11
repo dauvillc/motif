@@ -1,5 +1,7 @@
 """Implements functions to manipulate gridded data."""
 
+from typing import List
+
 import numpy as np
 import torch
 from haversine import haversine_vector
@@ -7,7 +9,7 @@ from haversine import haversine_vector
 EARTH_RADIUS = 6371228.0  # Earth radius in meters
 
 
-def crop_nan_border(src_image, tgt_images):
+def crop_nan_border(src_image: torch.Tensor, tgt_images: List[torch.Tensor]) -> List[torch.Tensor]:
     """Computes the smallest rectangle to which a source image can be
     cropped without losing any non-NaN values; then crops the target images
     to that rectangle.
@@ -36,7 +38,7 @@ def crop_nan_border(src_image, tgt_images):
     return tgt_images_cropped
 
 
-def crop_nan_border_numpy(src_image, tgt_images):
+def crop_nan_border_numpy(src_image: np.ndarray, tgt_images: List[np.ndarray]) -> List[np.ndarray]:
     """Computes the smallest rectangle to which a source image can be
     cropped without losing any non-NaN values; then crops the target images
     to that rectangle. NumPy implementation.
@@ -74,7 +76,9 @@ def crop_nan_border_numpy(src_image, tgt_images):
     return tgt_images_cropped
 
 
-def grid_distance_to_point(grid_lat, grid_lon, lat, lon):
+def grid_distance_to_point(
+    grid_lat: np.ndarray, grid_lon: np.ndarray, lat: float, lon: float
+) -> np.ndarray:
     """Computes the distance between a point and all points of a grid.
     Args:
         grid_lat (numpy.ndarray): The latitude grid, of shape (H, W).
@@ -93,7 +97,10 @@ def grid_distance_to_point(grid_lat, grid_lon, lat, lon):
 
 
 def distance_to_overlap(
-    target_coords, *ref_coords, downsample_factor_ref=5, downsample_factor_target=2
+    target_coords: torch.Tensor,
+    *ref_coords_args: torch.Tensor,
+    downsample_factor_ref: int = 5,
+    downsample_factor_target: int = 2,
 ):
     """For every point in a target 2D grid of latitudes and longitudes,
     and given reference 2D grids of coordinates,
@@ -101,7 +108,7 @@ def distance_to_overlap(
     Args:
         target_coords (torch.Tensor): tensor of shape (B, 2, H, W) containing the
             latitudes and longitudes of the target grid.
-        *ref_coords (torch.Tensor): tensors of shape (B, 2, H, W) containing the
+        *ref_coords_args (torch.Tensor): tensors of shape (B, 2, H, W) containing the
             latitudes and longitudes of the reference grids.
         downsample_factor_ref (int): Factor by which to downsample the reference grids
             before computing the distances. This greatly speeds up the computation
@@ -116,12 +123,17 @@ def distance_to_overlap(
     # Downsample the grids
     if downsample_factor_ref > 1:
         ref_coords = [
-            ref[:, :, ::downsample_factor_ref, ::downsample_factor_ref] for ref in ref_coords
+            ref[:, :, ::downsample_factor_ref, ::downsample_factor_ref] for ref in ref_coords_args
         ]
+    else:
+        raise ValueError("downsample_factor_ref must be greater than 1 to reduce memory usage.")
     if downsample_factor_target > 1:
         factor = downsample_factor_target
         H0, W0 = target_coords.shape[2], target_coords.shape[3]
         target_coords = target_coords[:, :, ::factor, ::factor]
+    else:
+        raise ValueError("downsample_factor_target must be greater than 1 to reduce memory usage.")
+
     # Reshape the tensors to (B, H*W, 2)
     B, _, H, W = target_coords.shape
     target_coords = target_coords.reshape(B, 2, -1).permute(0, 2, 1)

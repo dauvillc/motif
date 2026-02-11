@@ -2,6 +2,8 @@
 Implements the Source class.
 """
 
+from typing import Dict, Generator, List, Tuple
+
 
 class Source:
     """Represents a source of data, which could be 2D, 1D or 0D (scalar), not accounting for the
@@ -28,13 +30,13 @@ class Source:
 
     def __init__(
         self,
-        source_name,
-        source_type,
-        dim,
-        data_vars,
-        charac_vars,
-        input_only_vars=[],
-        output_only_vars=[],
+        source_name: str,
+        source_type: str,
+        dim: int,
+        data_vars: List[str],
+        charac_vars: Dict[str, Dict[str, float]],
+        input_only_vars: List[str] = [],
+        output_only_vars: List[str] = [],
         **kwargs,
     ):
         self.name = source_name
@@ -56,36 +58,36 @@ class Source:
         self.output_vars_mask = [var in self.output_vars for var in data_vars]
 
         # Characteristic variables: only keep the entries that are in data_vars
-        self.charac_vars = {}
-        for charac_var_name, charac_vars in charac_vars.items():
+        self.charac_vars: Dict[str, Dict[str, float]] = {}
+        for charac_var_name, charac_var_dict in charac_vars.items():
             self.charac_vars[charac_var_name] = {
                 data_var_name: value
-                for data_var_name, value in charac_vars.items()
+                for data_var_name, value in charac_var_dict.items()
                 if data_var_name in self.data_vars
             }
         # Pre-compute the list of the values of all charac variables
         self.charac_values = [value for _, _, value in self.iter_charac_variables()]
 
-    def n_data_variables(self):
+    def n_data_variables(self) -> int:
         """Returns the number of data variables in the source."""
         return len(self.data_vars)
 
-    def n_input_variables(self):
+    def n_input_variables(self) -> int:
         return len(self.input_vars)
 
-    def n_output_variables(self):
+    def n_output_variables(self) -> int:
         """Returns the number of output variables in the source."""
         return len(self.output_vars)
 
-    def n_target_variables(self):
+    def n_target_variables(self) -> int:
         return len(self.output_vars)
 
-    def n_charac_variables(self):
+    def n_charac_variables(self) -> int:
         """Returns the number of charac variables in the source,
         counting those of all data variables."""
         return sum([len(vars) for vars in self.charac_vars.values()])
 
-    def iter_charac_variables(self):
+    def iter_charac_variables(self) -> Generator[Tuple[str, str, float], None, None]:
         """Yields successive pairs (charac_var_name, data_var_name, value) where
         value is the value of the charac variable charac_var_name for the data variable
         data_var_name."""
@@ -93,16 +95,16 @@ class Source:
             for data_var_name, value in charac_vars.items():
                 yield charac_var_name, data_var_name, value
 
-    def get_charac_values(self):
+    def get_charac_values(self) -> List[float]:
         """Returns the list of the values of all charac variables."""
         return self.charac_values
 
-    def get_input_variables_mask(self):
+    def get_input_variables_mask(self) -> List[bool]:
         """Returns a list M of length n_data_variables, where M[i] is True if the i-th
         variable is an input variable, and False if it is an output-only variable."""
         return self.input_vars_mask
 
-    def get_output_variables_mask(self):
+    def get_output_variables_mask(self) -> List[bool]:
         """Returns a list M of length n_data_variables, where M[i] is True if the i-th
         variable is an output variable, and False if it is an input-only variable."""
         return self.output_vars_mask

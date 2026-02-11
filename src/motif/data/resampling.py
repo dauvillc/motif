@@ -4,13 +4,14 @@ import logging
 import math
 import traceback
 import warnings
+from typing import cast
 
 import numpy as np
 import xarray as xr
 from numpy import nan as NA
-from pyresample import SwathDefinition
 from pyresample.area_config import create_area_def
-from pyresample.bilinear import NumpyBilinearResampler
+from pyresample.bilinear._numpy_resampler import NumpyBilinearResampler
+from pyresample.geometry import AreaDefinition, DynamicAreaDefinition, SwathDefinition
 from pyresample.image import ImageContainerNearest
 from pyresample.utils import check_and_wrap
 
@@ -39,14 +40,14 @@ warnings.simplefilter(action="ignore")
 EARTH_RADIUS = 6371228.0  # Earth radius in meters
 
 
-def pad_dataset(ds, max_size):
+def pad_dataset(ds: xr.Dataset, max_size: tuple[int, int]) -> xr.Dataset:
     """Pads the dataset ds to the size max_size, by adding missing values
     at the bottom and right of the dataset.
     If the dataset is already larger than max_size, crops it to max_size.
 
     Args:
         ds (xarray.Dataset): The dataset to pad.
-        max_size (tuple): The maximum size of the dataset, as a tuple (scan, pixel).
+        max_size (tuple[int, int]): The maximum size of the dataset, as a tuple (scan, pixel).
     """
     # Retrieve the size of the dataset
     sizes = ds.sizes
@@ -70,7 +71,7 @@ def pad_dataset(ds, max_size):
     return ds
 
 
-def reverse_spatially(ds, dim_x, dim_y):
+def reverse_spatially(ds: xr.Dataset, dim_x: str, dim_y: str) -> xr.Dataset:
     """Reverses the dataset ds spatially, i.e. possibly reverses the spatial dimensions
     so that the latitude is decreasing from the top to the bottom of the image,
     and the longitude is increasing from left to right.
@@ -83,32 +84,38 @@ def reverse_spatially(ds, dim_x, dim_y):
     # The latitude variable in TC-PRIMEd is in degrees north, so it should be
     # decreasing from the top to the bottom of the image.
     if ds.latitude[0, 0] < ds.latitude[1, 0]:
-        return ds.isel(**{dim_y: slice(None, None, -1)})
+        return ds.isel(**{dim_y: slice(None, None, -1)})  # type: ignore
     if ds.longitude[0, 0] > ds.longitude[0, 1]:
-        return ds.isel(**{dim_x: slice(None, None, -1)})
+        return ds.isel(**{dim_x: slice(None, None, -1)})  # type: ignore
     return ds
 
 
-def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None, return_area=False):
+def regrid(
+    ds: xr.Dataset,
+    target_resolution: float,
+    has_channel_dimension: bool = False,
+    target_area: AreaDefinition | None = None,
+    return_area: bool = False,
+) -> xr.Dataset | tuple[xr.Dataset, AreaDefinition]:
     """Regrids the dataset ds to a regular grid with a given target resolution.
     Uses an equiangular (Plate Carrée) projection.
 
     Args:
-        ds (xarray.Dataset): Dataset to regrid. Must include the variables 'latitude'
+        ds: Dataset to regrid. Must include the variables 'latitude'
             and 'longitude' and have exactly two dimensions.
-        target_resolution (float): The target resolution in km (converted to degrees
+        target_resolution: The target resolution in km (converted to degrees
             at the equator).
-        has_channel_dimension (bool): Whether the variables other than latitude
+        has_channel_dimension: Whether the variables other than latitude
             and longitude have a trailing channel dimension.
-        target_area (pyresample.AreaDefinition or None): If provided, the target area
+        target_area: If provided, the target area
             definition to use for regridding. If None, a new area definition is created
             based on the target resolution and the extent of the swath.
-        return_area (bool): Whether to return the target area definition along with
+        return_area: Whether to return the target area definition along with
             the regridded dataset.
 
     Returns:
         xr.Dataset: The regridded dataset.
-        (pyresample.AreaDefinition, optional): The target area definition,
+        (DynamicAreaDefinition, optional): The target area definition,
             returned if return_area is True.
     """
     # Get the dimensions from the latitude variable
@@ -153,12 +160,15 @@ def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None,
         res_degrees = (target_resolution * 1000) / meters_per_degree
 
         with DisableLogger():
-            target_area_def = create_area_def(
-                area_id="dynamic_equiangular",
-                projection=proj_dict,
-                resolution=res_degrees,
-                units="degrees",
-                shape=None,
+            target_area_def = cast(
+                DynamicAreaDefinition,
+                create_area_def(
+                    area_id="dynamic_equiangular",
+                    projection=proj_dict,
+                    resolution=res_degrees,
+                    units="degrees",
+                    shape=None,
+                ),
             )
 
         # Create the grid lat/lon values from the swath
@@ -177,7 +187,7 @@ def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None,
         try:
             resampled_vars[var] = resampler.resample(
                 ds[var].values,
-                fill_value=float("nan"),
+                fill_value=float("nan"),  # type: ignore
             )
         except Exception as e:
             print("Longitude:", lon)
@@ -210,7 +220,9 @@ def regrid(ds, target_resolution, has_channel_dimension=False, target_area=None,
     return result
 
 
-def regrid_to_grid(ds, grid_lat, grid_lon, has_channel_dimension=False):
+def regrid_to_grid(
+    ds: xr.Dataset, grid_lat: np.ndarray, grid_lon: np.ndarray, has_channel_dimension: bool = False
+) -> xr.Dataset:
     """Regrids the dataset ds to a given target grid defined by its latitude
     and longitude arrays.
 
@@ -249,7 +261,10 @@ def regrid_to_grid(ds, grid_lat, grid_lon, has_channel_dimension=False):
     for var in variables:
         try:
             resampler = ImageContainerNearest(
-                ds[var].values, swath, radius_of_influence, fill_value=float("nan")
+                ds[var].values,
+                swath,
+                radius_of_influence,
+                fill_value=float("nan"),  # type: ignore
             )
             resampled_vars[var] = resampler.resample(
                 target_swath,

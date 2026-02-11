@@ -2,10 +2,15 @@
 Thanks to A03ki for the implementation.
 """
 
+from typing import Callable
+
 import torch
+from torch import Tensor
 
 
-def ICNR(tensor, initializer, upscale_factor=2, *args, **kwargs):
+def ICNR(
+    tensor: Tensor, initializer: Callable, upscale_factor: float = 2, *args, **kwargs
+) -> Tensor:
     "tensor: the 2-dimensional Tensor or more"
     upscale_factor_squared = upscale_factor * upscale_factor
     assert tensor.shape[0] % upscale_factor_squared == 0, (

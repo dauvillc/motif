@@ -3,16 +3,27 @@ tokenizes them, masks a portion of the tokens, and trains a model to predict
 the masked tokens."""
 
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, List, cast
 
 import torch
 import torch.nn as nn
+from torch import Tensor
+
+from motif.data.source import Source
+from motif.datatypes import (
+    BatchWithSampleIndexes,
+    MultisourceTensor,
+    Prediction,
+    PreprocessedBatch,
+    SourceData,
+    SourceEmbedding,
+    SourceEmbeddingDict,
+)
 
 # Local module imports
 from motif.lightning_module.base_module import MultisourceAbstractModule
 from motif.models.embedding_layers import SourcetypeEmbedding2d
-from motif.models.output_layers import (
-    SourcetypeProjection2d,
-)
+from motif.models.output_layers import SourcetypeProjection2d
 
 
 class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
@@ -20,6 +31,7 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
     some of the sources and trains its backbone to reconstruct the missing data.
     The sources may have different dimensionalities (e.g. 2D, 1D, 0D) and come with
     spatiotemporal coordinates.
+
     The structure expects its input as a dict D {(source_name, index): map}, where D[(source_name, index)] contains the
     following key-value pairs (all shapes excluding the batch dimension):
     - "id" is a list of strings of length (B,) each uniquely identifying the elements.
@@ -39,29 +51,26 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
 
     def __init__(
         self,
-        sources,
-        cfg,
-        backbone,
-        n_sources_to_mask,
-        patch_size,
-        values_dim,
-        coords_dim,
-        adamw_kwargs,
-        lr_scheduler_kwargs,
-        cond_dim=None,
-        loss_max_distance_from_center=None,
-        ignore_land_pixels_in_loss=False,
-        normalize_coords_across_sources=False,
-        mask_only_sources=None,
-        forecasting_mode=False,
-        validation_dir=None,
-        metrics={},
-        use_modulation_in_output_layers=False,
-        conditioning_mlp_layers=0,
-        coords_corner_and_center_embedding=False,
-        output_resnet_channels=None,
-        output_resnet_blocks=None,
-        sources_selection_seed=123,
+        sources: List[Source],
+        cfg: Dict[str, Any],
+        backbone: nn.Module,
+        n_sources_to_mask: int,
+        patch_size: int,
+        dim: int,
+        adamw_kwargs: Dict[str, Any],
+        lr_scheduler_kwargs: Dict[str, Any],
+        cond_dim: int | None = None,
+        coords_encoding_method: str = "fourier",
+        coords_dim: int | None = None,
+        loss_max_distance_from_center: int | None = None,
+        ignore_land_pixels_in_loss: bool = False,
+        normalize_coords_across_sources: bool = False,
+        mask_only_sources: list | None = None,
+        validation_dir: str | None = None,
+        metrics: Dict[str, Callable] = {},
+        use_modulation_in_output_layers: bool = False,
+        conditioning_mlp_layers: int = 0,
+        sources_selection_seed: int = 123,
         **kwargs,
     ):
         """
@@ -72,12 +81,16 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
             backbone (nn.Module): Backbone model to train.
             n_sources_to_mask (int): Number of sources to mask in each sample.
             patch_size (int): Size of the patches to split the images into.
-            values_dim (int): Dimension of the values embeddings.
-            coords_dim (int): Dimension of the coordinates embeddings.
+            dim (int): Embedding dimension.
             adamw_kwargs (dict): Arguments to pass to torch.optim.AdamW (other than params).
             lr_scheduler_kwargs (dict): Arguments to pass to the learning rate scheduler.
             cond_dim (int or None): Dimension of the conditioning embedding.
-                If None, defaults to values_dim.
+                If None, defaults to dim.
+            coords_encoding_method (str): Method to encode the coordinates, either:
+                - "fourier": Use Fourier features to embed the coordinates.
+                - "avg_pool": Use average pooling to embed the coordinates.
+            coords_dim (int, optional): Dimension of the coordinate embedding if
+                using fourier encoding.
             loss_max_distance_from_center (int or None): If specified, only pixels within this
                 distance from the center of the storm (in km) will be considered
                 in the loss computation.
@@ -89,10 +102,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                 If False, the coordinates will be normalized as sinusoïds.
             mask_only_sources (str or list of str): List of source names to mask. If not None,
                 the masked source will chosen among those only.
-                Mutually exclusive with forecasting_mode.
-            forecasting_mode (bool): If True, will always mask all sources that are forecasted.
-                A source is forecasted if its time delta is negative.
-                Mutually exclusive with mask_only_sources.
             validation_dir (optional, str or Path): Directory where to save the validation plots.
                 If None, no plots will be saved.
             metrics (dict of str: callable): Metrics to compute during training and validation.
@@ -101,11 +110,6 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
             use_modulation_in_output_layers (bool): If True, applies modulation to the output layers.
             conditioning_mlp_layers (int): Number of linear layers to apply in the conditioning
                 embedding after the concatenation of the different conditioning variables.
-            coords_corner_and_center_embedding (bool): Whether to use a corner-and-center
-                embedding for the coordinates instead of a patch embedding. Serves as a
-                baseline for ablation studies.
-            output_resnet_channels (int): Number of channels in the output ResNet.
-            output_resnet_blocks (int): Number of blocks in the output ResNet.
             sources_selection_seed (int, optional): Seed for the random number generator used to select
                 the sources to mask.
             **kwargs: Additional arguments to pass to the LightningModule constructor.
@@ -126,9 +130,10 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
         self.backbone = backbone
         self.n_sources_to_mask = n_sources_to_mask
         self.patch_size = patch_size
-        self.values_dim = values_dim
+        self.dim = dim
+        self.cond_dim = cond_dim if cond_dim is not None else dim
+        self.coords_encoding_method = coords_encoding_method
         self.coords_dim = coords_dim
-        self.cond_dim = cond_dim if cond_dim is not None else values_dim
 
         # RNG that will be used to select the sources to mask
         self.source_select_gen = torch.Generator().manual_seed(sources_selection_seed)
@@ -141,24 +146,17 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
         if isinstance(mask_only_sources, str):
             mask_only_sources = [mask_only_sources]
         self.mask_only_sources = mask_only_sources
-        self.forecasting_mode = forecasting_mode
 
         # Initialize the embedding layers
         self.init_embedding_layers(
             use_modulation_in_output_layers,
-            output_resnet_channels,
-            output_resnet_blocks,
             conditioning_mlp_layers=conditioning_mlp_layers,
-            coords_corner_and_center_embedding=coords_corner_and_center_embedding,
         )
 
     def init_embedding_layers(
         self,
-        use_modulation_in_output_layers,
-        output_resnet_channels,
-        output_resnet_blocks,
-        conditioning_mlp_layers=0,
-        coords_corner_and_center_embedding=False,
+        use_modulation_in_output_layers: bool,
+        conditioning_mlp_layers: int = 0,
     ):
         """Initializes the weights of the embedding layers."""
         if not hasattr(self, "use_diffusion_t"):
@@ -186,23 +184,21 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                     self.sourcetype_embeddings[source.type] = SourcetypeEmbedding2d(
                         n_input_channels,
                         self.patch_size,
-                        self.values_dim,
-                        self.coords_dim,
+                        self.dim,
                         self.cond_dim,
                         n_charac_vars=source.n_charac_variables(),
+                        coords_encoding_method=self.coords_encoding_method,
+                        coords_dim=self.coords_dim,
                         use_diffusion_t=self.use_diffusion_t,
                         pred_mean_channels=pred_mean_channels,
                         conditioning_mlp_layers=conditioning_mlp_layers,
-                        coords_corner_and_center_embedding=coords_corner_and_center_embedding,
                     )
                     self.sourcetype_output_projs[source.type] = SourcetypeProjection2d(
-                        self.values_dim,
+                        self.dim,
                         n_output_channels,
                         self.patch_size,
                         cond_dim=self.cond_dim,
                         use_modulation=use_modulation_in_output_layers,
-                        resnet_channels=output_resnet_channels,
-                        resnet_blocks=output_resnet_blocks,
                     )
                 else:
                     raise NotImplementedError(
@@ -219,180 +215,166 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                         "the same for all sources of type {source.type}"
                     )
 
-    def embed(self, x):
-        """Embeds the input sources. The embedded tensors' shapes depend on the dimensionality
-        of the source:
-        - For 2D sources: (B, h, w, Dv) for the values and (B, h, w, Dc) for the coordinates,
-            where h = H // patch_size and w = W // patch_size.
+    def embed(self, x: PreprocessedBatch) -> SourceEmbeddingDict:
+        """Embeds all sources using their corresponding embedding layers.
+        Args:
+            x: Preprocessed input sources.
+        Returns:
+            output: Embedded sources.
         """
-        output = {}
-        for source_index_pair, data in x.items():
-            source_name = source_index_pair[0]  # Extract the source name from the tuple
+        output: SourceEmbeddingDict = {}
+        for src, data in x.items():
+            source_name = src.name
             source_obj = self.sources[source_name]
+
             # Only keep the current source's input variables from the values.
             input_mask = torch.tensor(
                 source_obj.get_input_variables_mask(),
-                device=data["values"].device,
+                device=data.values.device,
                 dtype=torch.bool,
             )
-            emb_data = {k: v for k, v in data.items() if k != "values"}  # No in-place operation
-            emb_data["values"] = data["values"][:, input_mask]
+            values = data.values[:, input_mask]  # (B, C_in, ...)
+            if data.pred_mean is not None:
+                pred_mean = data.pred_mean[:, input_mask]  # (B, C_in, ...)
+            else:
+                pred_mean = None
 
+            emb_data = SourceData(
+                values=values,
+                coords=data.coords,  # The other fields are unchanged
+                dt=data.dt,
+                avail=data.avail,
+                avail_mask=data.avail_mask,
+                dist_to_center=data.dist_to_center,
+                landmask=data.landmask,
+                characs=data.characs,
+                diffusion_t=data.diffusion_t,
+                pred_mean=pred_mean,
+            )
+
+            # Run the embedding layer corresponding to the source type
             source_type = source_obj.type
-            v, c, cond = self.sourcetype_embeddings[source_type](emb_data)
-            # v: embedded values, c: coords, cond: conditioning tensor
+            src_embedding = self.sourcetype_embeddings[source_type](emb_data)
 
-            output[source_index_pair] = {
-                "values": v,
-                "coords": c,
-                "conditioning": cond,
-                "avail": data["avail"].clone(),
-            }
+            output[src] = src_embedding
 
         return output
 
-    def select_sources_to_mask(self, x, sample_indices=None):
+    def select_sources_to_mask(
+        self, x: PreprocessedBatch, sample_indices: List[int] | None = None
+    ) -> MultisourceTensor:
         """Given a multi-sources batch, randomly selects a source to mask in each sample.
         Does not actually perform the masking.
         Args:
-            x (dict of (source_name, index) to dict of str to tensor): The input sources.
-            sample_indices (tensor of shape (B, ), optional): Indices of the samples in the batch.
+            x: Input sources.
+            sample_indices: Indices of the samples in the batch.
                 If provided, will use these indices to seed the random number generator
                 for reproducibility.
         Returns:
-            avail_flags (dict of (source_name, index) to tensor): The availability flags for each source,
+            avail_flags: The availability flags for each source,
                 as tensors of shape (B,), such that:
                 * avail_flags[s][i] == 1 if the source s is available for the sample i,
                 * avail_flags[s][i] == 0 if the source s is masked for the sample i,
                 * avail_flags[s][i] == -1 if the source s is missing for the sample i.
         """
         n_sources = len(x)
-        any_elem = next(iter(x.values()))["values"]
+        any_elem = next(iter(x.values())).values
         batch_size = any_elem.shape[0]
         device = any_elem.device
 
-        # Case where we mask the sources that are forecasted.
-        if self.forecasting_mode:
-            # In this case, we mask all sources that are forecasted (i.e. have a negative dt).
-            avail_flags = {}
-            for source_index_pair, data in x.items():
-                if self.mask_only_sources is not None:
-                    source_name = source_index_pair[0]
-                    if source_name not in self.mask_only_sources:
-                        # Do not mask this source
-                        avail_flags[source_index_pair] = data["avail"].clone()
-                        continue
-                avail_flag = data["avail"].clone()
-                # Mask the sources that are forecasted (i.e. have a negative dt).
-                avail_flag[(avail_flag == 1) & (data["dt"] < 0)] = 0
-                avail_flags[source_index_pair] = avail_flag
-            # We need to check that for each sample, at least one source has been masked.
-            total_avail_flag = sum([flag == 0 for flag in avail_flags.values()])
-            if (total_avail_flag == 0).any():
-                raise ValueError(
-                    "At least one sample has no sources to mask. "
-                    "Please check the forecasting_mode argument."
-                )
-        # Case where we randomly select the sources to mask
+        # Select the sources to mask, which can differ between samples in the batch.
+        # Missing sources cannot be masked.
+        # Strategy: we'll generate a random noise tensor of shape (B, n_sources)
+        # and for each row, mask the sources with the highest noise.
+        if sample_indices is None:
+            noise = torch.rand((batch_size, n_sources), generator=self.source_select_gen).to(device)
         else:
-            # Select the sources to mask, which can differ between samples in the batch.
-            # Missing sources cannot be masked.
-            # Strategy: we'll generate a random noise tensor of shape (B, n_sources)
-            # and for each row, mask the sources with the highest noise.
-            if sample_indices is None:
-                noise = torch.rand((batch_size, n_sources), generator=self.source_select_gen).to(
-                    device
-                )
-            else:
-                # Generate a noise tensor using a seed that depends on the sample index
-                seeds = self.predict_step_seeds[sample_indices].to(device)
-                noise = torch.stack(
-                    [
-                        torch.rand(
-                            (n_sources,),
-                            generator=torch.Generator().manual_seed(seed.item()),
-                        )
-                        for seed in seeds
-                    ],
-                    dim=0,
-                ).to(device)
-            for i, (source_index_pair, data) in enumerate(x.items()):
-                # Multiply the noise by the availability mask (-1 for missing sources, 1 otherwise)
-                noise[:, i] = noise[:, i] * data["avail"].squeeze(-1)
-            # If only masking among a subset of sources, set the noise of the other sources to -2
-            if self.mask_only_sources is not None:
-                for i, source_index_pair in enumerate(x):
-                    source_name = source_index_pair[0]
-                    if source_name not in self.mask_only_sources:
-                        noise[:, i] = -2.0  # Lower than the minimum possible noise (-1)
-            # Gather the indices of the sources to mask for each sample
-            _, sources_to_mask = noise.topk(self.n_sources_to_mask, dim=1)  # (B, n_sources_to_mask)
-            # Deduce a matrix M of shape (B, n_sources) such that M[b, i] = 1 if the source i
-            # should be masked for the sample b, and 0 otherwise.
-            masked_sources_matrix = torch.zeros(
-                (batch_size, n_sources), dtype=torch.bool, device=device
-            )  # (B, n_sources)
-            masked_sources_matrix.scatter_(1, sources_to_mask, True)
-            # Deduce the availability flags for each source
-            avail_flags = {}
-            for i, (source_index_pair, data) in enumerate(x.items()):
-                avail_flag = data["avail"].clone()
-                avail_flag[masked_sources_matrix[:, i]] = 0
-                avail_flags[source_index_pair] = avail_flag
+            # Generate a noise tensor using a seed that depends on the sample index
+            seeds = self.predict_step_seeds[sample_indices].to(device)
+            noise = torch.stack(
+                [
+                    torch.rand(
+                        (n_sources,),
+                        generator=torch.Generator().manual_seed(cast(int, seed.item())),
+                    )
+                    for seed in seeds
+                ],
+                dim=0,
+            ).to(device)
+        for i, (src, data) in enumerate(x.items()):
+            # Multiply the noise by the availability mask (-1 for missing sources, 1 otherwise)
+            noise[:, i] = noise[:, i] * data.avail.squeeze(-1)
+        # If only masking among a subset of sources, set the noise of the other sources to -2
+        if self.mask_only_sources is not None:
+            for i, src in enumerate(x):
+                source_name = src.name
+                if source_name not in self.mask_only_sources:
+                    noise[:, i] = -2.0  # Lower than the minimum possible noise (-1)
+        # Gather the indices of the sources to mask for each sample
+        _, sources_to_mask = noise.topk(self.n_sources_to_mask, dim=1)  # (B, n_sources_to_mask)
+        # Deduce a matrix M of shape (B, n_sources) such that M[b, i] = 1 if the source i
+        # should be masked for the sample b, and 0 otherwise.
+        masked_sources_matrix = torch.zeros(
+            (batch_size, n_sources), dtype=torch.bool, device=device
+        )  # (B, n_sources)
+        masked_sources_matrix.scatter_(1, sources_to_mask, True)
+        # Deduce the availability flags for each source
+        avail_flags = {}
+        for i, (src, data) in enumerate(x.items()):
+            avail_flag = data.avail.clone()
+            avail_flag[masked_sources_matrix[:, i]] = 0
+            avail_flags[src] = avail_flag
         return avail_flags
 
-    @abstractmethod
-    def mask(self, x, masking_seed=None):
-        pass
-
-    def forward(self, x, return_embeddings=False):
+    def forward(self, x: PreprocessedBatch) -> MultisourceTensor:
         """Computes the forward pass of the model.
         Args:
-            x (dict of (source_name, index) to dict of str to tensor): The input sources, masked.
-            return_embeddings (bool): If True, also returns the embedded values and coordinates.
+            x: The input sources, masked.
         Returns:
-            y (dict of (source_name, index) to tensor): The predicted values for each source.
-            embeddings (optional, dict of (source_name, index) to dict of str to tensor):
-                The embedded data for each source, if return_embeddings is True.
+            y: The predicted values for each source.
         """
         # Save the shape of the tokens before they're embedded, so that we can
         # later remove the padding.
         spatial_shapes = {
-            source_index_pair: data["values"].shape[2:]
-            for source_index_pair, data in x.items()
-            if len(data["values"].shape) > 2
+            src: data.values.shape[2:] for src, data in x.items() if len(data.values.shape) > 2
         }
         # Embed and mask the sources
-        x = self.embed(x)
+        embed_x: SourceEmbeddingDict = self.embed(x)
 
         # Run the transformer backbone
-        pred = self.backbone(x)
+        backbone_out: MultisourceTensor = self.backbone(embed_x)
 
-        for source_index_pair, v in pred.items():
-            # Embedded conditioning for the final modulation
-            cond = x[source_index_pair]["conditioning"]
-            # Project from latent values space to output space using the output layer
+        # Create a source embedding dict with updated embeddings for the projection layers
+        embed_out = {
+            src: SourceEmbedding(
+                embedding=backbone_out[src],
+                conditioning=embed_x[src].conditioning,
+                coords=embed_x[src].coords,
+            )
+            for src in backbone_out
+        }
+
+        pred: MultisourceTensor = {}
+        for src, y in embed_out.items():
+            # Project from latent space to values space using the output layer
             # corresponding to the source type
-            source_name = source_index_pair[0]  # Extract source name from tuple
+            source_name = src.name
             src_type = self.sources[source_name].type
-            pred[source_index_pair] = self.sourcetype_output_projs[src_type](v, cond)
+            pred[src] = self.sourcetype_output_projs[src_type](y)
         # For 2D sources, remove the padding
-        for source_index_pair, spatial_shape in spatial_shapes.items():
-            pred[source_index_pair] = pred[source_index_pair][
-                ..., : spatial_shape[0], : spatial_shape[1]
-            ]
-        if return_embeddings:
-            return pred, x
+        for src, spatial_shape in spatial_shapes.items():
+            pred[src] = pred[src][..., : spatial_shape[0], : spatial_shape[1]]
+
         return pred
 
     @abstractmethod
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch: BatchWithSampleIndexes, batch_idx: int) -> Tensor:
         pass
 
     @abstractmethod
-    def validation_step(self, input_batch, batch_idx):
+    def validation_step(self, batch: BatchWithSampleIndexes, batch_idx: int) -> Tensor:
         pass
 
     @abstractmethod
-    def predict_step(self, batch, batch_idx):
+    def predict_step(self, batch: BatchWithSampleIndexes, batch_idx: int) -> Prediction:
         pass

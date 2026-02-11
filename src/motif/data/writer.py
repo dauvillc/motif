@@ -3,12 +3,18 @@
 import gc
 import os
 from pathlib import Path
+from typing import Sequence, cast
 
+import lightning.pytorch as pl
 import numpy as np
 import pandas as pd
 import torch
 import xarray as xr
 from lightning.pytorch.callbacks import BasePredictionWriter
+
+from motif.data.dataset import MultiSourceDataset
+from motif.datatypes import BatchWithSampleIndexes, GenerativePrediction, Prediction
+from motif.lightning_module.base_reconstructor import MultisourceAbstractReconstructor
 
 
 def atomic_to_netcdf(ds: xr.Dataset, path: Path):
@@ -48,27 +54,23 @@ class MultiSourceWriter(BasePredictionWriter):
     and contains a DataFrame with the metadata.
     """
 
-    def __init__(self, root_dir, dt_max, dataset=None, mode="w"):
+    def __init__(self, root_dir: Path, dataset: MultiSourceDataset, mode="w"):
         """
         Args:
-            root_dir (str or Path): The root directory where the predictions will be written.
-            dt_max (pd.Timedelta): The maximum time delta in the dataset.
-            dataset (MultiSourceDataset, optional): Dataset object that includes a method
-                normalize(values, source_name, denorm=False) that can be used to denormalize the
-                values before writing them to disk. If None, the values will
-                not be denormalized.
+            root_dir: The root directory where the predictions will be written.
+            dataset: Dataset object.
             mode (str): Writing mode, either 'w' to erase any pre-existing info data,
                 or 'a' to append to existing data.
         """
         super().__init__(write_interval="batch")
         self.root_dir = Path(root_dir)
-        self.dt_max = dt_max
+        self.dt_min, self.dt_max = dataset.dt_min, dataset.dt_max
         self.dataset = dataset
         self.mode = mode
         if not root_dir.exists():
             self.root_dir.mkdir(parents=True, exist_ok=True)
 
-    def setup(self, trainer, pl_module, stage):
+    def setup(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str):
         self.rank = str(trainer.global_rank)
         self.targets_dir = self.root_dir / "targets"
         self.predictions_dir = self.root_dir / "predictions"
@@ -83,91 +85,88 @@ class MultiSourceWriter(BasePredictionWriter):
             self.info_file.unlink()
 
     def write_on_batch_end(
-        self, trainer, pl_module, prediction, batch_indices, batch, batch_idx, dataloader_idx
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        prediction: Prediction,
+        batch_indices: Sequence[int] | None,
+        batch: BatchWithSampleIndexes,
+        batch_idx: int,
+        dataloader_idx: int,
     ):
+        pl_module = cast(MultisourceAbstractReconstructor, pl_module)
         # Retrieve sample indexes and batch data
-        sample_indexes, batch = batch
-        # Extract the components from the prediction dictionary
-        if "sol" in prediction:
-            # Flow matching model output format
-            pred = prediction["sol"]
-            avail_tensors = prediction["avail_flags"]
-            # Flow matching models always have multiple realizations
+        sample_indexes, raw_batch = batch
+        # Extract the components from the prediction
+        pred, avail = prediction.pred, prediction.avail
+
+        # Generative predictions
+        if isinstance(prediction, GenerativePrediction):
             has_multiple_realizations = True
-            # Extract predicted means if they exist
-            pred_means = prediction.get("pred_mean", None)
-            embeddings = None
-            # Check if intermediate steps are included
-            includes_intermediate_steps = prediction["includes_intermediate_steps"]
-            # Number of dimensions before the channel dimension in the predictions
-            # always at least 1 for batch dim
-            leading_pred_dims = (
-                1 + int(has_multiple_realizations) + int(includes_intermediate_steps)
-            )
-            time_grid = prediction["time_grid"].cpu().float().numpy()
-        elif "predictions" in prediction:
-            # Deterministic model output format
-            pred = prediction["predictions"]
-            avail_tensors = prediction["avail_flags"]
+            # Leading dims: R (realizations), T (diff steps), B (batch)
+            leading_pred_dims = 3
+
+        # Deterministic predictions
+        else:
             # Deterministic models typically don't have multiple realizations
             has_multiple_realizations = False
-            pred_means = None
-            includes_intermediate_steps = False
-            embeddings = prediction.get("embeddings", None)
             leading_pred_dims = 1  # batch dim only
-        else:
-            # Fallback for other formats
-            raise ValueError(
-                "Unexpected prediction format. Expected dictionary with 'sol'/'predictions' and 'avail_flags' keys."
-            )
 
         # We'll write to the info file in append mode
-        for source_index_pair, data in batch.items():
-            source_name, src_index = source_index_pair  # Unpack the tuple
+        for src, data in raw_batch.items():
+            source_name = src.name
+            src_index = src.index
             with torch.no_grad():
                 # ================= DENORMALIZATION =================
-                if self.dataset is not None:
-                    device = data["values"].device
-                    _, targets = self.dataset.normalize(
-                        data["values"],
+                device = data.values.device
+                _, targets = self.dataset.normalize(
+                    data.values,
+                    source_name,  # Use only source_name for normalization
+                    denormalize=True,
+                    leading_dims=1,
+                    device=device,
+                )
+                if src in pred:
+                    _, pred[src] = self.dataset.normalize(
+                        pred[src],
                         source_name,  # Use only source_name for normalization
                         denormalize=True,
-                        leading_dims=1,
+                        leading_dims=leading_pred_dims,
                         device=device,
                     )
-                    if source_index_pair in pred:
-                        _, pred[source_index_pair] = self.dataset.normalize(
-                            pred[source_index_pair],
-                            source_name,  # Use only source_name for normalization
-                            denormalize=True,
-                            leading_dims=leading_pred_dims,
-                            device=device,
-                        )
-                    # Denormalize predicted means if they exist
-                    if pred_means is not None and source_index_pair in pred_means:
-                        _, pred_means[source_index_pair] = self.dataset.normalize(
-                            pred_means[source_index_pair],
-                            source_name,
-                            denormalize=True,
-                            leading_dims=1,  # batch dim only
-                            device=device,
-                        )
+                # Denormalize predicted means if they exist
+                if (
+                    isinstance(prediction, GenerativePrediction)
+                    and prediction.pred_mean is not None
+                    and src in prediction.pred_mean
+                ):
+                    _, prediction.pred_mean[src] = self.dataset.normalize(
+                        prediction.pred_mean[src],
+                        source_name,
+                        denormalize=True,
+                        leading_dims=1,  # batch dim only
+                        device=device,
+                    )
 
                 # ================= TARGETS =================
                 # Create directory structure with source_name/index to organize by both source and index
                 target_dir = self.targets_dir / source_name / str(src_index)
                 target_dir.mkdir(parents=True, exist_ok=True)
                 targets = targets.detach().cpu().float().numpy()
-                # Append the lat/lon to the targets
-                latlon = data["coords"].detach().cpu().float().numpy()
-                dt = data["dt"].detach().cpu().float().numpy() * self.dt_max
-                dt = pd.to_timedelta(dt).total_seconds()
+                # Retrieve the lat/lon and dt
+                latlon = data.coords.detach().cpu().float().numpy()
+                dt_float = data.dt.detach().cpu().float().numpy()
+                dt: np.ndarray = dt_float * (self.dt_max - self.dt_min) + self.dt_min
+
                 # The dimensions of the Datasets we'll create depend on the
                 # dimensionality of the source.
                 if len(targets.shape) == 4:  # 2d sources -> (B, C, H, W)
                     dims = ["sample", "H", "W"]
                 elif len(targets.shape) == 2:  # 0d sources -> (B, C)
                     dims = ["sample"]
+                else:
+                    raise ValueError(f"Unsupported number of dims: {targets.shape}")
+
                 # Fetch the names of the variables in the source
                 source_obj = pl_module.sources[source_name]
                 input_var_names = [v for v in source_obj.data_vars]
@@ -186,32 +185,28 @@ class MultiSourceWriter(BasePredictionWriter):
                 # Write each sample to a separate file. Ignore all samples for which the source
                 # is unavailable (i.e., has an availability flag of -1).
                 for k, sample_idx in enumerate(sample_indexes):
-                    if avail_tensors[source_index_pair][k].item() == -1:
+                    if avail[src][k].item() == -1:
                         continue
                     sample_target_ds = targets_ds.sel(sample=sample_idx)
                     atomic_to_netcdf(sample_target_ds, target_dir / f"{sample_idx}.nc")
 
                 # ================= PREDICTIONS =================
-                if source_index_pair in pred:
+                if src in pred:
                     # If no prediction was made for this source,
                     # skip it.
                     prediction_dir = self.predictions_dir / source_name / str(src_index)
                     prediction_dir.mkdir(parents=True, exist_ok=True)
                     # Only keep variables that are in the source's output_vars
-                    predictions = pred[source_index_pair].detach().cpu().float().numpy()
+                    predictions = pred[src].detach().cpu().float().numpy()
                     output_var_names = [v for v in source_obj.output_vars]
 
                     # Create xarray Dataset for predictions. Same principle as for targets.
-                    # However, the predictions may have additional leading dimensions
-                    # for the multiple realizations and/or intermediate steps.
-                    # for multiple realizations.
+                    # For generative predictions, create dims and coords for R and T
                     pred_dims = list(dims)
                     pred_coords = coords.copy()
-                    if includes_intermediate_steps:
-                        pred_dims = ["integration_step"] + pred_dims
-                        pred_coords["integration_step"] = time_grid
-                    if has_multiple_realizations:
-                        pred_dims = ["realization"] + pred_dims
+                    if isinstance(prediction, GenerativePrediction):
+                        pred_dims = ["realization", "integration_step"] + pred_dims
+                        pred_coords["integration_step"] = prediction.time_grid.cpu().float().numpy()
                         pred_coords["realization"] = np.arange(predictions.shape[0])
                     predictions_ds = xr.Dataset(
                         {
@@ -225,10 +220,12 @@ class MultiSourceWriter(BasePredictionWriter):
                     )
 
                     # Write predicted means if available
-                    if pred_means is not None and source_index_pair in pred_means:
-                        pred_mean_outputs = (
-                            pred_means[source_index_pair].detach().cpu().float().numpy()
-                        )
+                    if (
+                        isinstance(prediction, GenerativePrediction)
+                        and prediction.pred_mean is not None
+                        and src in prediction.pred_mean
+                    ):
+                        pred_mean_outputs = prediction.pred_mean[src].detach().cpu().float().numpy()
 
                         # Create a dataset for the predicted means
                         pred_mean_ds = xr.Dataset(
@@ -244,93 +241,26 @@ class MultiSourceWriter(BasePredictionWriter):
 
                     # Write each sample to a separate file
                     for k, sample_idx in enumerate(sample_indexes):
-                        if avail_tensors[source_index_pair][k].item() == -1:
+                        if avail[src][k].item() == -1:
                             continue
                         sample_prediction_ds = predictions_ds.sel(sample=sample_idx)
                         atomic_to_netcdf(sample_prediction_ds, prediction_dir / f"{sample_idx}.nc")
-
-                # ================= TRUE VF =================
-                if "true_vf" in prediction and source_index_pair in prediction["true_vf"]:
-                    true_vf = (
-                        prediction["true_vf"][source_index_pair].detach().cpu().float().numpy()
-                    )
-                    true_vf_dir = self.true_vf_dir / source_name / str(src_index)
-                    true_vf_dir.mkdir(parents=True, exist_ok=True)
-                    # When there is a true vf, it always has the same dimensions as the flow matching
-                    # predictions, except the time grid doesn't include the last time (which is 1.0).
-                    tvf_coords = dict(pred_coords)
-                    tvf_coords["integration_step"] = time_grid[:-1]
-                    true_vf_ds = xr.Dataset(
-                        {
-                            var: (
-                                pred_dims,
-                                true_vf[(slice(None),) * leading_pred_dims + (i, ...)],
-                            )  # Realization, batch, channel
-                            for i, var in enumerate(output_var_names)
-                        },
-                        coords=tvf_coords,
-                    )
-                    for k, sample_idx in enumerate(sample_indexes):
-                        if avail_tensors[source_index_pair][k].item() == -1:
-                            continue
-                        sample_true_vf_ds = true_vf_ds.sel(sample=sample_idx)
-                        atomic_to_netcdf(sample_true_vf_ds, true_vf_dir / f"{sample_idx}.nc")
-
-                # ================= EMBEDDINGS =================
-                if embeddings is not None and source_index_pair in embeddings:
-                    # If embeddings are available, write them to disk
-                    embedding_dir = self.embeddings_dir / source_name / str(src_index)
-                    embedding_dir.mkdir(parents=True, exist_ok=True)
-                    # There are three entries in the embeddings dict:
-                    # - "coords": The coordinates of the source, of shape (B, ..., Dc)
-                    #   where Dc is the coordinate embedding dimension.
-                    # - "values": The values of the source, of shape (B, ..., Dv)
-                    #   where Dv is the value embedding dimension.
-                    # - "conditioning": The embedded conditioning, of shape (B, ..., Dg)
-                    #   where Dg is the conditioning embedding dimension.
-                    embedded_coords = (
-                        embeddings[source_index_pair]["coords"].detach().cpu().float().numpy()
-                    )
-                    embedded_values = (
-                        embeddings[source_index_pair]["values"].detach().cpu().float().numpy()
-                    )
-                    embedded_cond = (
-                        embeddings[source_index_pair]["conditioning"]
-                        .detach()
-                        .cpu()
-                        .float()
-                        .numpy()
-                    )
-                    # Create a dataset for the embeddings
-                    embed_dims = ["sample"]
-                    if len(embedded_coords.shape) == 4:
-                        embed_dims += ["lat", "lon"]
-                    embedding_ds = xr.Dataset(
-                        {
-                            "coords": (embed_dims + ["coord_embed_dim"], embedded_coords),
-                            "values": (embed_dims + ["value_embed_dim"], embedded_values),
-                            "conditioning": (embed_dims + ["cond_embed_dim"], embedded_cond),
-                        },
-                        coords={
-                            "sample": sample_indexes,
-                        },
-                    )
-                    # Write each sample to a separate file
-                    for k, sample_idx in enumerate(sample_indexes):
-                        if avail_tensors[source_index_pair][k].item() == -1:
-                            continue
-                        sample_embedding_ds = embedding_ds.sel(sample=sample_idx)
-                        atomic_to_netcdf(sample_embedding_ds, embedding_dir / f"{sample_idx}.nc")
 
                 # ================= INFO FILES =================
                 batch_size = latlon.shape[0]
                 # Convert the time deltas from fractions of dt_max to absolute durations
                 # in hours.
-                dt = data["dt"].detach().cpu().float().numpy() * self.dt_max
-                dt = pd.Series(dt, name="dt")
+                dt_series = pd.Series(dt, name="dt")
 
-                # Add a flag to indicate whether predicted means are available
-                has_pred_means = pred_means is not None and source_index_pair in pred_means
+                # Add flags to indicate if the predictions are generative and if they
+                # include predicted means.
+                includes_intermediate_steps = isinstance(prediction, GenerativePrediction)
+                has_multiple_realizations = isinstance(prediction, GenerativePrediction)
+                has_pred_means = (
+                    isinstance(prediction, GenerativePrediction)
+                    and prediction.pred_mean is not None
+                    and src in prediction.pred_mean
+                )
 
                 # Store the information about that source's data for that batch
                 # in the info DataFrame.
@@ -339,8 +269,8 @@ class MultiSourceWriter(BasePredictionWriter):
                         "sample_index": sample_indexes,
                         "source_name": [source_name] * batch_size,
                         "source_index": [src_index] * batch_size,  # Add observation index
-                        "avail": avail_tensors[source_index_pair].detach().cpu().float().numpy(),
-                        "dt": dt,
+                        "avail": avail[src].detach().cpu().float().numpy(),
+                        "dt": dt_series,
                         "channels": [targets.shape[1]] * batch_size,
                         "spatial_shape": [targets.shape[2:]] * batch_size,
                         "has_multiple_realizations": [has_multiple_realizations] * batch_size,

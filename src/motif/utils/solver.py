@@ -1,42 +1,45 @@
 """Implements classes to solve the flow matching ODE for multi-sources data."""
 
+from typing import Callable, Dict
+
 import torch
+
+from motif.datatypes import (
+    MultisourceTensor,
+    SourceIndex,
+)
 
 
 class MultisourceEulerODESolver:
-    """Solves the ODE (df/dt)(x, t) = u(x, t) with the Euler method.
-    u should receive the following arguments:
-        - x: dict {source: x_s} where x_s is a tensor of shape (B, C, ...)
-            giving the values of the flow for the source s at t;
-        - t: tensor of shape (B,) giving the time at which the vector field is
-            evaluated.
-    u should return a dict {source: u_s} where u_s is a tensor of shape (B, C, ...)
-    giving the values of the vector field for the source s at t.
-    """
+    """Solves the ODE (df/dt)(x, t) = u(x, t) with the Euler method."""
 
-    def __init__(self, vf_func):
+    def __init__(self, vf_func: Callable[[MultisourceTensor, torch.Tensor], MultisourceTensor]):
         """
         Args:
-            vf_func (Callable): Function that computes the vector field u(x, t).
+            vf_func (Callable): Function that computes the vector field u(x, t)
+                for each source.
         """
         self.vf_func = vf_func
 
-    def solve(self, x_0, time_grid, return_intermediate_steps=False):
+    def solve(
+        self, x_0: MultisourceTensor, time_grid: torch.Tensor, return_intermediate_steps=True
+    ) -> MultisourceTensor | Dict[SourceIndex, torch.Tensor]:
         """Solves the ODE for the given initial conditions.
         Args:
-            x_0 (dict): Initial conditions, dict {source: x_s} where x_s is a tensor
+            x_0 (MultisourceTensor): Initial conditions, dict {source: x_s} where x_s is a tensor
                 of shape (B, C, ...) giving the initial values of the flow for the
                 source s.
-            time_grid (tensor): Time grid of shape (T,) within [0, 1]; times at which
+            time_grid (torch.Tensor): Time grid of shape (T,) within [0, 1]; times at which
                 the flow will be evaluated. Also defines the step size for the Euler
                 method.
             return_intermediate_steps (bool): If True, returns the intermediate solutions at
                 each time step.
         Returns:
-            sol: dict {source: x_s} where x_s is a tensor of shape (B, C, ...)
-                giving the values of the flow for the source s at the times in time_grid.
-                If return_intermediate is True, the values are stored in a tensor of shape
-                (T, B, C, ...).
+            If return_intermediate_steps is True, returns a dict {source: sol_s} where sol_s is
+                a tensor of shape (T, B, C, ...) giving the solution of the flow for the
+                source s at each time step. If False, returns a dict {source: final_sol_s}
+                where final_sol_s is a tensor of shape (B, C, ...) giving the solution at
+                the final time step.
         """
         device = next(iter(x_0.values())).device
         time_grid = time_grid.to(device)

@@ -1,73 +1,47 @@
 import torch
 import torch.nn as nn
 
+from motif.datatypes import MultisourceTensor, SourceEmbeddingDict
+
 
 class FeedForward(nn.Module):
     def __init__(
         self,
-        values_dim,
-        coords_dim,
-        update_coords,
-        dropout=0.0,
-        act_layer=nn.GELU,
-        inner_ratio=4,
-        **kwargs
+        dim: int,
+        dropout: float = 0.0,
+        act_layer: nn.Module = nn.GELU(),
+        inner_ratio: float = 4.0,
+        **kwargs,
     ):
         """Args:
-        values_dim (int): Dimension of the values.
-        coords_dim (int): Dimension of the coordinates.
-        update_coords (bool): Whether to update the coordinates.
+        dim (int): Dimension of the values.
         dropout (float): Dropout rate.
         act_layer (nn.Module): Activation layer to use.
         inner_ratio (int): Ratio for the inner dimension compared to the input dimension.
         """
         super().__init__()
-        self.update_coords = update_coords
-        values_inner_dim = int(values_dim * inner_ratio)
-        coords_inner_dim = int(coords_dim * inner_ratio)
+        inner_dim = int(dim * inner_ratio)
 
         # Network for values
         self.values_net = nn.Sequential(
-            nn.Linear(values_dim, values_inner_dim),
-            act_layer(),
+            nn.Linear(dim, inner_dim),
+            act_layer,
             nn.Dropout(dropout),
-            nn.Linear(values_inner_dim, values_dim),
+            nn.Linear(inner_dim, dim),
             nn.Dropout(dropout),
         )
 
-        # Network for coordinates
-        if update_coords:
-            self.coords_net = nn.Sequential(
-                nn.Linear(coords_dim, coords_inner_dim),
-                act_layer(),
-                nn.Dropout(dropout),
-                nn.Linear(coords_inner_dim, coords_dim),
-                nn.Dropout(dropout),
-            )
-        else:
-            self.coords_net = nn.Identity()
-
-    def forward(self, x, **kwargs):
+    def forward(self, x: SourceEmbeddingDict, **kwargs) -> MultisourceTensor:
         """
         Args:
-            x (dict of str: dict of str: tensor): Dictionary of inputs, such that
-                x[(source_name, index)] contains the keys "values" and "coords".
+            x (SourceEmbeddingDict): dict {src: SourceEmbedding}.
         Returns:
-            dict of str: dict: Dictionary of outputs, such that
-                outputs[(source_name, index)] contains the keys "values" and "coords" with
-                the updated values and coordinates.
+            Dictionary {src: x_s} of updated features of shape (B, ..., dim).
         """
         outputs = {}
-        for source_name, data in x.items():
-            values = data["values"]
-            coords = data["coords"]
-
-            # Process values and coordinates through their respective networks
-            updated_values = self.values_net(values)
-            updated_coords = self.coords_net(coords)
-
-            # Return both updated values and coordinates
-            outputs[source_name] = {"values": updated_values, "coords": updated_coords}
+        for src, data in x.items():
+            features = data.embedding
+            outputs[src] = self.values_net(features)
         return outputs
 
 
