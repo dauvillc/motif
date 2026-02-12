@@ -8,12 +8,12 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
 from motif.datatypes import MultisourceTensor, SourceEmbedding, SourceEmbeddingDict
-from motif.models.motif.cross_attention import MultisourcesWindowedCrossAttention
+from motif.models.motif.cross_att_flash import MultisourcesWindowedCrossAttention
 from motif.models.motif.patch_merging import (
     MultiSourcePatchMerging,
     MultiSourcePatchSplitting,
 )
-from motif.models.motif.self_attention import SeparateWindowedAttention
+from motif.models.motif.self_att_flash import SeparateWindowedAttention
 from motif.models.motif.small_layers import FeedForward
 
 
