@@ -27,18 +27,18 @@ dataset:
         availability: [1, 1]
       pmw:
         sources:
-          -tc_primed_pmw_AMSR2_GCOMW1
-          -tc_primed_pmw_TMI_TRMM
-          -tc_primed_pmw_SSMI_F11
-          -tc_primed_pmw_SSMI_F13
-          -tc_primed_pmw_SSMI_F14
-          -tc_primed_pmw_SSMI_F15
-          -tc_primed_pmw_SSMIS_F16
-          -tc_primed_pmw_SSMIS_F17
-          -tc_primed_pmw_SSMIS_F18
-          -tc_primed_pmw_SSMIS_F19
+          - tc_primed_pmw_AMSR2_GCOMW1
+          - tc_primed_pmw_TMI_TRMM
+          - tc_primed_pmw_SSMI_F11
+          - tc_primed_pmw_SSMI_F13
+          - tc_primed_pmw_SSMI_F14
+          - tc_primed_pmw_SSMI_F15
+          - tc_primed_pmw_SSMIS_F16
+          - tc_primed_pmw_SSMIS_F17
+          - tc_primed_pmw_SSMIS_F18
+          - tc_primed_pmw_SSMIS_F19
         # Min, max number of sources from the group
-        availability: [2, 2]
+        availability: [1, 1]
 
 trainer:
   strategy: ddp
