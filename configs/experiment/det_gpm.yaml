@@ -1,0 +1,44 @@
+# @package _global_
+defaults:
+  - override /sources: pmw_37_89
+  - override /lightning_module: deterministic
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: det_gpm
+  group: det_gpm
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['tc_primed_pmw_GMI_GPM']
+
+model:
+  dropout: 0.1
+
+dataset:
+  train:
+    dt_min: -3
+    dt_max: 3
+    groups_availability:
+      gpm:
+        sources: ['tc_primed_pmw_GMI_GPM'] 
+        availability: [1, 1]
+      pmw:
+        sources:
+          -tc_primed_pmw_AMSR2_GCOMW1
+          -tc_primed_pmw_TMI_TRMM
+          -tc_primed_pmw_SSMI_F11
+          -tc_primed_pmw_SSMI_F13
+          -tc_primed_pmw_SSMI_F14
+          -tc_primed_pmw_SSMI_F15
+          -tc_primed_pmw_SSMIS_F16
+          -tc_primed_pmw_SSMIS_F17
+          -tc_primed_pmw_SSMIS_F18
+          -tc_primed_pmw_SSMIS_F19
+        # Min, max number of sources from the group
+        availability: [2, 2]
+
+trainer:
+  strategy: ddp
