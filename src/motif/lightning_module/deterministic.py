@@ -234,6 +234,7 @@ class MultisourceDeterministicReconstructor(MultisourceAbstractReconstructor):
 
     def validation_step(self, batch: BatchWithSampleIndexes, batch_idx: int) -> torch.Tensor:
         _, raw_batch = batch
+        batch_size = raw_batch[list(raw_batch.keys())[0]].values.shape[0]
         preproc_batch = self.preproc_input(raw_batch)
         # Mask the sources
         masked_batch = self.mask(preproc_batch)
@@ -248,6 +249,7 @@ class MultisourceDeterministicReconstructor(MultisourceAbstractReconstructor):
             on_step=False,
             prog_bar=True,
             sync_dist=True,
+            batch_size=batch_size,
         )
 
         avail_flags = {src: masked_batch[src].avail for src in masked_batch}
