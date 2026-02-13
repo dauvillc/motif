@@ -4,6 +4,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 
 from motif.datatypes import SourceData, SourceEmbedding
@@ -78,9 +79,8 @@ class ConvPatchEmbedding2d(nn.Module):
         H, W = image.shape[2:]
         pad_h = (self.patch_size - H % self.patch_size) % self.patch_size
         pad_w = (self.patch_size - W % self.patch_size) % self.patch_size
-        pad = nn.ZeroPad2d((0, pad_w, 0, pad_h))
+        image = F.pad(image, (0, pad_w, 0, pad_h))
 
-        image = pad(image)
         embedded_image = self.embedding(image)  # (B, emb_dim, h, w)
         embedded_image = embedded_image.permute(0, 2, 3, 1)  # (B, h, w, emb_dim)
 
@@ -168,6 +168,7 @@ class AvgPoolCoordinateEmbedding(nn.Module):
 
     def __init__(self, patch_size: int):
         super().__init__()
+        self.patch_size = patch_size
         self.pool = nn.AvgPool2d(kernel_size=patch_size, stride=patch_size)
 
     def forward(self, coords: Tensor, times: Tensor) -> Tensor:
@@ -178,6 +179,13 @@ class AvgPoolCoordinateEmbedding(nn.Module):
         Returns:
             Tensor: Tensor of shape (B, h, w, 3) containing embedded coordinates.
         """
+
+        # Compute padding dynamically
+        H, W = coords.shape[2:]
+        pad_h = (self.patch_size - H % self.patch_size) % self.patch_size
+        pad_w = (self.patch_size - W % self.patch_size) % self.patch_size
+        coords = F.pad(coords, (0, pad_w, 0, pad_h))
+
         embedded_coords = self.pool(coords)  # (B, 2, h, w)
         B, _, h, w = embedded_coords.shape
         times = times.view(B, 1, 1, 1).expand(B, 1, h, w)  # (B, 1, h, w)

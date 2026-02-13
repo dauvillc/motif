@@ -1,14 +1,14 @@
 dropout: 0.0
 dim: 512
 cond_dim: 256
-coords_encoding_method: "fourier"
-coords_dim: 256
+coords_encoding_method: "avg_pool"
+coords_dim: null  # Doesn't matter for avg_pool
 backbone:
   _target_: motif.models.motif.backbone.MultisourceGeneralBackbone
   n_blocks: 12
   dim: ${model.dim}
   att_inner_dim: ${model.dim}
-  positional_encoding: "rpb"
+  positional_encoding: "rope"
   coords_dim: ${model.coords_dim}
   coords_inner_dim: ${model.coords_dim}
   cond_dim: ${model.cond_dim}

@@ -31,8 +31,9 @@ class MultisourceGeneralBackbone(nn.Module):
         n_blocks: int,
         dim: int,
         att_inner_dim: int,
-        coords_dim: int,
-        coords_inner_dim: int,
+        positional_encoding: str = "rope",
+        coords_dim: int | None = None,
+        coords_inner_dim: int | None = None,
         cond_dim: int | None = None,
         num_heads: int = 8,
         cross_att_window_size: int = 4,
@@ -44,21 +45,39 @@ class MultisourceGeneralBackbone(nn.Module):
     ):
         """
         Args:
-            n_blocks: number of blocks in the backbone.
-            dim: Embedding dimension.
-            att_inner_dim: Inner dimension for attention.
-            coords_dim: Dimension of the coordinate embeddings.
-            coords_inner_dim: Inner dimension for coordinate embeddings.
-            cond_dim: Dimension of the conditioning vector for each source.
+            n_blocks (int): number of blocks in the backbone.
+            dim (int): Embedding dimension.
+            att_inner_dim (int): Inner dimension for attention.
+            positional_encoding (str): Method for positional encoding in attention layers.
+                Can be either "rope" for RoPE or "rpb" for relative positional bias.
+            coords_dim (int, optional): Dimension of the coordinate embeddings. Must be specified
+                if positional_encoding is "rpb". Ignored if positional_encoding is "rope".
+            coords_inner_dim (int, optional): Inner dimension for coordinate embeddings. Must
+                be specified if positional_encoding is "rpb".
+                Ignored if positional_encoding is "rope".
+            cond_dim (int, optional): Dimension of the conditioning vector for each source.
                 if None, defaults to dim.
-            downsample_input: Whether to downsample the inputs by a factor 2
+            downsample_input (bool, optional): Whether to downsample the inputs by a factor 2
                 before feeding them to the backbone.
-            use_checkpointing: Whether to use gradient checkpointing to save memory
-                at the cost of extra computation.
+            use_checkpointing (bool, optional): Whether to use gradient checkpointing
+                to save memory at the cost of extra computation.
         """
         super().__init__()
         cond_dim = cond_dim if cond_dim is not None else dim
-        self.dim, self.coords_dim, self.cond_dim = dim, coords_dim, cond_dim
+        self.dim, self.cond_dim = dim, cond_dim
+        if positional_encoding == "rpb":
+            assert coords_dim is not None and coords_inner_dim is not None, (
+                "coords_dim and coords_inner_dim must be specified for relative positional bias"
+            )
+            self.coords_dim = coords_dim
+            self.coords_inner_dim = coords_inner_dim
+        elif positional_encoding == "rope":
+            # For RoPE, the coordinate embeddings are not learned but computed on the fly
+            self.coords_dim = 0
+            self.coords_inner_dim = 0
+        else:
+            raise ValueError(f"Unknown positional_encoding: {positional_encoding}")
+
         if use_checkpointing:
             self.ckpt = cast(
                 Callable[..., SourceEmbeddingDict],
@@ -84,10 +103,11 @@ class MultisourceGeneralBackbone(nn.Module):
                         MultisourcesWindowedCrossAttention(
                             dim,
                             att_inner_dim,
-                            coords_dim,
-                            coords_inner_dim,
                             window_size=cross_att_window_size,
                             num_heads=num_heads,
+                            positional_encoding=positional_encoding,
+                            coords_dim=coords_dim,
+                            coords_inner_dim=coords_inner_dim,
                             dropout=dropout,
                         ),
                         dim,
@@ -97,9 +117,10 @@ class MultisourceGeneralBackbone(nn.Module):
                         SeparateWindowedAttention(
                             dim,
                             att_inner_dim,
-                            coords_dim,
-                            coords_inner_dim,
                             num_heads=num_heads,
+                            positional_encoding=positional_encoding,
+                            coords_dim=coords_dim,
+                            coords_inner_dim=coords_inner_dim,
                             window_size=iwsa_window_size,
                             shifted=shifted,
                             dropout=dropout,

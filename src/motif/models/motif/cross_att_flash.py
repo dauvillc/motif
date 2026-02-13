@@ -8,25 +8,33 @@ from torch import Tensor
 
 from motif.datatypes import MultisourceTensor, SourceEmbeddingDict
 from motif.models.motif.flash_attention import SpatiotemporalFlashAttention
+from motif.models.motif.rope_attention import SpatiotemporalRoPEAttention
 from motif.models.motif.small_layers import RMSNorm
 
 
 class MultisourcesWindowedCrossAttention(nn.Module):
     """Computes attention across the sources using a windowed system.
     - For a given source $S$ and spatial window $u$, the features are projected to queries,
-       keys and values. The same is done for the coordinates.
+       keys and values.
     - Within each window $u$, the feature queries and keys are averaged over the spatial dims
-        to get $Qf_u^S, Kf_u^S$. The same is done for the coordinates to obtain $Qc_u^S, Kc_u^S$.
+        to get $Qf_u^S, Kf_u^S$.
     - The keys and queries are concatenated into cross-window, cross-source sequences
-        $(Qf, Kf), (Qc, Kc)$.
-    - The attention weights A are computed as
-        $$A = softmax((Qf @ Kf^T / sqrt(Df) + \alpha * Qc @ Kc^T / sqrt(Dc))$$
+        $(Qf, Kf)$.
+    - The attention weights A are computed following:
+        $$A = \\text{softmax}\\left(\\frac{Qf Kf^T}{\\sqrt{Df}}\\right)$$
     - Within each window $u$, the features are concatenated along the channel dim
         to get the values $V_u^S$.
     - All windows' values are concatenated into a single sequence of vectors V.
     - The re-weighted values are computed as V' = A @ V.
     - V' is split back into windows, projected back to the original dimension,
         and summed back to the original features.
+
+    The coordinates are used as positional encoding, in two possible ways:
+    - Either as Relative Positional Bias (RPB), in which case they are projected
+        to queries and keys and used to compute a bias matrix that is added to the attention
+        scores before the softmax.
+    - Or using RoPE, in which case the coordinates are used to compute rotation angles
+        that are applied to the feature queries and keys before computing the attention scores.
 
     For 2D sources, the windows are square patches of size window_size x window_size.
     """
@@ -35,10 +43,11 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         self,
         dim: int,
         inner_dim: int,
-        coords_dim: int,
-        coords_inner_dim: int,
         window_size: int,
         num_heads: int,
+        positional_encoding: str = "rope",
+        coords_dim: int | None = None,
+        coords_inner_dim: int | None = None,
         inner_dim_v: int | None = None,
         mask_self_attention: bool = True,
         dropout: float = 0.0,
@@ -47,11 +56,13 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         Args:
             dim (int): Dimension of the input features.
             inner_dim (int): Dimension of the inner features used for computing queries and keys.
-            coords_dim (int): Dimension of the coordinate embeddings.
-            coords_inner_dim (int): Dimension of the inner coordinate embeddings used
-                for computing queries and keys.
             window_size (int): Size of the window for attention.
             num_heads (int): Number of attention heads.
+            positional_encoding (str): Method for positional encoding in attention layers.
+                Can be either "rope" for RoPE or "rpb" for relative positional bias.
+            coords_dim (int | None): Dimension of the coordinate embeddings.
+            coords_inner_dim (int | None): Dimension of the inner coordinate embeddings used
+                for computing queries and keys.
             inner_dim_v (int, optional): Dimension of the inner features used for computing values.
                 If None, defaults to inner_dim.
             mask_self_attention (bool, optional): Whether to mask out attention weights
@@ -61,8 +72,6 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         super().__init__()
         self.dim = dim
         self.inner_dim = inner_dim
-        self.coords_dim = coords_dim
-        self.coords_inner_dim = coords_inner_dim
         self.window_size = window_size
         if inner_dim_v is None:
             inner_dim_v = inner_dim
@@ -70,16 +79,23 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         self.dropout = dropout
         self.mask_self_attention = mask_self_attention
 
-        # Projections to queries and keys for the features and the coordinates
-        self.f_qk_proj = nn.Sequential(nn.Linear(dim, inner_dim * 2), RMSNorm(inner_dim * 2))
-        self.c_qk_proj = nn.Sequential(
-            nn.Linear(coords_dim, coords_inner_dim * 2), RMSNorm(coords_inner_dim * 2)
-        )
+        self.positional_encoding = positional_encoding
 
-        # Attention computation module
-        self.attention = SpatiotemporalFlashAttention(
-            self.inner_dim, self.coords_inner_dim, num_heads
-        )
+        # Projections to queries and keys for the features
+        self.f_qk_proj = nn.Sequential(nn.Linear(dim, inner_dim * 2), RMSNorm(inner_dim * 2))
+        # The coords will only be projected to keys and queries if we use relative positional bias.
+        if positional_encoding == "rpb":
+            assert coords_dim is not None and coords_inner_dim is not None, (
+                "coords_dim and coords_inner_dim must be specified for relative positional bias"
+            )
+            self.c_qk_proj = nn.Sequential(
+                nn.Linear(coords_dim, coords_inner_dim * 2), RMSNorm(coords_inner_dim * 2)
+            )
+            self.attention = SpatiotemporalFlashAttention(
+                self.inner_dim, coords_inner_dim, num_heads
+            )
+        elif positional_encoding == "rope":
+            self.attention = SpatiotemporalRoPEAttention(self.inner_dim, num_heads)
 
         # Projection (compression) to values
         self.v_proj = nn.Linear(dim, inner_dim_v, bias=False)
@@ -132,12 +148,20 @@ class MultisourcesWindowedCrossAttention(nn.Module):
             windowed_shapes[src] = features.shape[1:3]
             n_windows.append(prod(windowed_shapes[src]))
 
-            # Project to queries and keys
+            # Project the features to queries and keys
             f_qk: Tensor = self.f_qk_proj(f_avg)  # (b, Wh, Ww, 2 * Dqk)
-            c_qk: Tensor = self.c_qk_proj(c_avg)  # (b, Wh, Ww, 2 * Dqk_c)
+            # If using RPB, project the coords to queries and keys as well.
+            if self.positional_encoding == "rpb":
+                c_qk: Tensor = self.c_qk_proj(c_avg)  # (b, Wh, Ww, 2 * Dqk_c)
+            else:
+                # If using RoPE, the coords dim remains 3 (lat,lon,time),
+                # but we still duplicate the last dim to then split into queries and keys.
+                c_qk = c_avg.repeat(1, 1, 1, 2)  # (b, Wh, Ww, 2 * Dc)
+
             # Regroup the windows into a single sequence
             f_qk = rearrange(f_qk, "b Wh Ww Df -> b (Wh Ww) Df")
             c_qk = rearrange(c_qk, "b Wh Ww Dc -> b (Wh Ww) Dc")
+
             # Split into queries and keys
             f_queries[src], f_keys[src] = f_qk.chunk(2, dim=-1)
             c_queries[src], c_keys[src] = c_qk.chunk(2, dim=-1)

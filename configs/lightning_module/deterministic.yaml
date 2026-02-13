@@ -8,6 +8,7 @@ lr_scheduler_kwargs: ${lr_scheduler}
 loss_max_distance_from_center: null
 ignore_land_pixels_in_loss: false 
 adamw_kwargs: ${optimizer}
+coords_encoding_method: ${model.coords_encoding_method}
 metrics: ${metrics}
 
 backbone: ${model.backbone}
