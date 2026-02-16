@@ -68,6 +68,13 @@ class MultisourcesWindowedCrossAttention(nn.Module):
             raise ValueError(
                 f"inner_dim must be divisible by num_heads, got {inner_dim} and {num_heads}"
             )
+        self.head_dim = inner_dim // num_heads
+        if coords_inner_dim % num_heads != 0:
+            raise ValueError(
+                "coords_inner_dim must be divisible by num_heads, "
+                f"got {coords_inner_dim} and {num_heads}"
+            )
+        self.coords_head_dim = coords_inner_dim // num_heads
         if inner_dim_v is None:
             inner_dim_v = inner_dim
         self.inner_v_dim = inner_dim_v
@@ -164,9 +171,9 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         c_k = torch.cat(list(c_keys.values()), dim=-2)  # (B, H, N, Dc)
         values = torch.cat(list(values.values()), dim=-2)  # (B, H, N, Dh * n)
         # Compute attention weights (B, H, N, N)
-        attn_weights: Tensor = (f_q @ f_k.transpose(-2, -1)) / self.inner_dim**0.5 + self.alpha * (
+        attn_weights: Tensor = (f_q @ f_k.transpose(-2, -1)) / self.head_dim**0.5 + self.alpha * (
             c_q @ c_k.transpose(-2, -1)
-        ) / self.coords_inner_dim**0.5
+        ) / self.coords_head_dim**0.5
 
         if self.mask_self_attention:
             # For each source, the attention weights contain a block centered on the diagonal that

@@ -24,7 +24,7 @@ class SeparateWindowedAttention(nn.Module):
         dim: int,
         inner_dim: int,
         num_heads: int,
-        positional_encoding: str = "rope",
+        positional_encoding: str = "rpb",
         coords_dim: int | None = None,
         coords_inner_dim: int | None = None,
         window_size: int = 8,

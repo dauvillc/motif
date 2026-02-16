@@ -45,7 +45,7 @@ class MultisourcesWindowedCrossAttention(nn.Module):
         inner_dim: int,
         window_size: int,
         num_heads: int,
-        positional_encoding: str = "rope",
+        positional_encoding: str = "rpb",
         coords_dim: int | None = None,
         coords_inner_dim: int | None = None,
         inner_dim_v: int | None = None,
@@ -182,8 +182,9 @@ class MultisourcesWindowedCrossAttention(nn.Module):
             # For each source, the attention weights contain a block centered on the diagonal that
             # correspond to key/query pairs from the same source. In order to prioritize attention
             # between different sources only in this layer, we'll mask out those blocks.
+            # Note: torch SDPA format: True means attend, False means mask out.
             blocks = [torch.full((n, n), True) for n in n_windows]
-            attn_mask = torch.block_diag(*blocks)  # (N, N)
+            attn_mask = ~torch.block_diag(*blocks)  # (N, N)
             # Add a batch dim to make the mask broadcastable with the attention scores
             attn_mask = rearrange(attn_mask, "n1 n2 -> 1 n1 n2")
             attn_mask = attn_mask.to(values.device)

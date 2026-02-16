@@ -344,7 +344,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
             time_grid = torch.linspace(0, 1, self.n_sampling_diffusion_steps)
             masked_batch = cast(PreprocessedBatch, None)  # So that it exists in the scope
             avail_flags = cast(MultisourceTensor, None)
-            pred_means = cast(MultisourceTensor, None)
+            pred_means: MultisourceTensor = {}
 
             for real_idx in range(n_realizations_per_sample):
                 # We pass in the previously used availability flags to ensure that the same
@@ -431,7 +431,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 pred=all_sols,
                 avail=avail_flags,
                 time_grid=time_grid,
-                pred_mean=pred_means,
+                pred_mean=pred_means if self.use_det_model else None,
             )
 
     def make_deterministic_predictions(self, masked_x: PreprocessedBatch) -> PreprocessedBatch:
@@ -444,18 +444,19 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 updated_x[source_idx_pair]["pred_mean"].
                 The dict is updated in-place.
         """
-        # Run the deterministic model
-        means = self.det_model(masked_x)
-        # Update the values of the sources with the predicted values
-        for src, data in masked_x.items():
-            pred_mean = means[src]
-            # The predicted means are only valid for the masked sources
-            # (i.e. the sources that have an availability flag set to 0).
-            # -> Set the predicted means to 0 for the sources that are not masked.
-            pred_mean[data.avail != 0] = 0
-            # Update the values with the predicted values
-            masked_x[src].pred_mean = pred_mean
-        return masked_x
+        with torch.no_grad():
+            # Run the deterministic model
+            means = self.det_model(masked_x)
+            # Update the values of the sources with the predicted values
+            for src, data in masked_x.items():
+                pred_mean = means[src]
+                # The predicted means are only valid for the masked sources
+                # (i.e. the sources that have an availability flag set to 0).
+                # -> Set the predicted means to 0 for the sources that are not masked.
+                pred_mean[data.avail != 0] = 0
+                # Update the values with the predicted values
+                masked_x[src].pred_mean = pred_mean
+            return masked_x
 
     def compute_loss(
         self,
@@ -480,8 +481,16 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         # Compute the MSE between the true and predicted velocity fields loss for each source
         losses: MultisourceTensor = {}
         for src in pred:
+            y, y_pred = y_true[src], pred[src]
             # Compute the pointwise loss for each source.
-            source_loss = (pred[src] - y_true[src]).pow(2)
+            source_loss = (y_pred - y).pow(2)
+            # TODO: test
+            if self.use_det_model:
+                mean = masked_batch[src].pred_mean
+                if mean is None:
+                    raise ValueError("pred_mean is None in compute_loss with use_det_model = True")
+                true_dir = y - mean
+                true_dir = true_dir / (true_dir.norm(dim=-1, keepdim=True) + 1e-8)
             # Multiply by the loss mask
             source_loss_mask = loss_masks[src].unsqueeze(1).expand_as(source_loss)
             source_loss = source_loss * source_loss_mask

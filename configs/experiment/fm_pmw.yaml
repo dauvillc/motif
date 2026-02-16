@@ -2,7 +2,7 @@
 defaults:
   - override /sources: pmw_37_89
   - override /lightning_module: flow_matching
-  - override /lr_scheduler: cosine_warmup_150epochs
+  - override /lr_scheduler: cosine_warmup_100epochs
   - override /metrics: none
   - override /model: motif_12b_d512
 
@@ -10,8 +10,8 @@ lightning_module:
   patch_size: 4
 
 wandb:
-  name: diff_pmw
-  group: diff_pmw
+  name: fm_pmw
+  group: fm_pmw
 
 dataset:
   train:
@@ -21,7 +21,7 @@ dataset:
       pmw:
         sources: ['pmw']  # Includes all sources of type 'pmw'
         # Min, max number of sources from the group
-        availability: [2, 3]
+        availability: [2, 2]
   
 trainer:
   strategy: ddp

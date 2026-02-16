@@ -31,7 +31,7 @@ class MultisourceGeneralBackbone(nn.Module):
         n_blocks: int,
         dim: int,
         att_inner_dim: int,
-        positional_encoding: str = "rope",
+        positional_encoding: str = "rpb",
         coords_dim: int | None = None,
         coords_inner_dim: int | None = None,
         cond_dim: int | None = None,
