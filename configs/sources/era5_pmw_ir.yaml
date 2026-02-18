@@ -1,8 +1,7 @@
 tc_primed:
   era5:
-    variables: ['pressure_msl', 'u_wind_10m', 'v_wind_10m', 'sst', 'dist_to_center']
+    variables: ['pressure_msl', 'u_wind_10m', 'v_wind_10m', 'sst']
     input_only: ['sst']
-    output_only: ['dist_to_center']
   pmw:
     AMSR2_GCOMW1:
         variables: ['TB_36.5H', 'TB_36.5V', 'TB_A89.0H', 'TB_A89.0V']
@@ -31,10 +30,5 @@ tc_primed:
         variables: ['IRWIN']
     hursat:
         variables: ['IRWIN']
-  radar:
-    GMI_GPM:
-      variables: ['nearSurfPrecipTotRate']
-    TMI_TRMM:
-      variables: ['nearSurfPrecipTotRate']
     
 

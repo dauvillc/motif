@@ -143,8 +143,16 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
             0, 2**32 - 1, (1_000_000,), generator=self.source_select_gen
         )
 
-        if isinstance(mask_only_sources, str):
+        if mask_only_sources is None:
+            mask_only_sources = []
+        elif isinstance(mask_only_sources, str):
             mask_only_sources = [mask_only_sources]
+        # The strings included in mask_only_sources can either be source names or source types.
+        # We'll convert them to only source names for simplicity.
+        for src_name, src in self.sources.items():
+            if src_name in mask_only_sources or src.type in mask_only_sources:
+                if src_name not in mask_only_sources:
+                    mask_only_sources.append(src_name)
         self.mask_only_sources = mask_only_sources
 
         # Initialize the embedding layers
@@ -305,7 +313,7 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
             # Multiply the noise by the availability mask (-1 for missing sources, 1 otherwise)
             noise[:, i] = noise[:, i] * data.avail.squeeze(-1)
         # If only masking among a subset of sources, set the noise of the other sources to -2
-        if self.mask_only_sources is not None:
+        if self.mask_only_sources:
             for i, src in enumerate(x):
                 source_name = src.name
                 if source_name not in self.mask_only_sources:

@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+  - override /sources: era5_pmw_ir
+  - override /lightning_module: deterministic
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: det_EPI
+  group: det_EPI
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['pmw', 'era5']
+
+model:
+  dropout: 0.05
+
+dataset:
+  train:
+    dt_min: -3
+    dt_max: 3
+    groups_availability:
+      era5_pmw_ir:
+        sources:
+          - "pmw"  # Includes all sources of type 'pmw'
+          - "infrared"  # Includes all sources of type 'infrared'
+          - "tc_primed_era5"
+        # Min, max number of sources from the group
+        availability: [2, 3]
+      pmw:
+        sources: ['pmw']
+        availability: [0, 2]
+
+trainer:
+  strategy: ddp_find_unused_parameters_true

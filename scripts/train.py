@@ -150,8 +150,9 @@ class TrainJob(submitit.helpers.Checkpointable):
             time_checkpoint_callback,
             lr_monitor,
             model_summary,
-            UnusedParameterChecker(),
         ]
+        if cfg.get("check_unused_parameters", False):
+            callbacks.append(UnusedParameterChecker())
 
         # Create the trainer
         trainer = pl.Trainer(
