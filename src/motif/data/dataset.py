@@ -97,13 +97,13 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         dataset_dir: str,
         split: str,
         included_variables_dict: dict,
-        dt_min: int,
-        dt_max: int,
-        dt_min_norm: int | None = None,
-        dt_max_norm: int | None = None,
+        dt_min: float,
+        dt_max: float,
+        dt_min_norm: float | None = None,
+        dt_max_norm: float | None = None,
         groups_availability: dict = {},
         select_most_recent: bool = False,
-        min_ref_time_delta: int = 0,
+        min_ref_time_delta: float = 0,
         num_workers: int = 0,
         data_augmentation: MultisourceDataAugmentation | None = None,
         limit_samples: int | float | None = None,
@@ -131,13 +131,13 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 containing the variables (i.e. channels) to include for each source.
                 Variables also included in the second list will be included in the yielded
                 data but will be flagged as input-only in the Source object.
-            dt_min (int): The minimum time delta (in hours) between the reference time
+            dt_min (float): The minimum time delta (in hours) between the reference time
                 and the observation time.
-            dt_max (int): The maximum time delta (in hours) between the reference time
+            dt_max (float): The maximum time delta (in hours) between the reference time
                 and the observation time.
-            dt_min_norm (int or None): The minimum time delta (in hours) used for
+            dt_min_norm (float or None): The minimum time delta (in hours) used for
                 normalizing the time delta. If None, dt_min is used.
-            dt_max_norm (int or None): The maximum time delta (in hours) used for
+            dt_max_norm (float or None): The maximum time delta (in hours) used for
                 normalizing the time delta. If None, dt_max is used.
             groups_availability (Dict of str to dict): Dict defining groups of sources.
                 For each group, a minimum and a maximum number of sources from that group
@@ -160,7 +160,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             select_most_recent (bool): If True, prioritize the most recent observations within
                 a source when there are too many available sources of that type. Otherwise,
                 prioritize randomly.
-            min_ref_time_delta (int): The minimum time delta between two reference times
+            min_ref_time_delta (float): The minimum time delta between two reference times
                 of the same storm (ie between two samples of the same storm).
             num_workers (int): If > 1, number of workers to use for parallel loading of the data.
             data_augmentation (None or MultiSourceDataAugmentation): If not None, instance
