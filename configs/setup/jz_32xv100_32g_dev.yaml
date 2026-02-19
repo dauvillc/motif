@@ -16,8 +16,8 @@ setup:
   slurm_additional_parameters:
     hint: nomultithread
   local_setup:
-    - module purge
     - source ${oc.env:HOME}/.bash_profile
+    - v100
 
 trainer:
   devices: 4

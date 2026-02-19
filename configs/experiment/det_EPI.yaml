@@ -31,7 +31,7 @@ dataset:
         availability: [2, 3]
       pmw:
         sources: ['pmw']
-        availability: [0, 2]
+        availability: [1, 2]
 
 trainer:
   strategy: ddp_find_unused_parameters_true
