@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from time import localtime, strftime
+from typing import Any, cast
 
 import hydra
 import lightning.pytorch as pl
@@ -72,7 +73,8 @@ class PredictJob(submitit.helpers.Checkpointable):
 
         # Custom BasePredictionWriter to save the preds and targets with metadata (eg coords).
         writer = MultiSourceWriter(
-            run_results_dir, dataset.dt_max, dataset=dataset, **cfg["writer"]
+            run_results_dir,
+            dataset=dataset,
         )
 
         # Seed everything with the local seed, not the experiment's, to ensure
@@ -89,7 +91,7 @@ class PredictJob(submitit.helpers.Checkpointable):
         trainer.predict(pl_module, dataloader, return_predictions=False)
 
 
-def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
+def _make_executor(cfg: dict[str, Any]) -> submitit.AutoExecutor:
     # Where submitit writes logs/stdout/err and its internal state
     folder = Path("submitit") / (
         "pred_" + cfg["wandb"]["name"] + f"_{strftime('%Y%m%d_%H-%M-%S', localtime())}"
@@ -102,13 +104,13 @@ def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="make_predictions")
-def main(cfg: DictConfig):
+def main(raw_cfg: DictConfig):
     # Enable the full errors in Hydra
     os.environ["HYDRA_FULL_ERROR"] = "1"
 
     OmegaConf.register_new_resolver("eval", eval)
     OmegaConf.register_new_resolver("nan", lambda: float("nan"))
-    cfg = OmegaConf.to_object(cfg)
+    cfg = cast(dict[str, Any], OmegaConf.to_object(raw_cfg))
 
     # Create the job object and submit it to the auto executor.
     job = PredictJob(cfg)
