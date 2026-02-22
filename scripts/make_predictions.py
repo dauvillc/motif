@@ -31,10 +31,10 @@ class PredictJob(submitit.helpers.Checkpointable):
             run_id,
             best_or_latest="best",
         )
-        # Set the dataset's dt_max_norm to its dt_max value, to make
-        # sure the dt_max_norm used is the same as during training.
+        # Set the dataset's dt normalizations to the model's training values
         split = cfg["split"]
         exp_cfg["dataset"][split]["dt_max_norm"] = exp_cfg["dataset"][split]["dt_max"]
+        exp_cfg["dataset"][split]["dt_min_norm"] = exp_cfg["dataset"][split]["dt_min"]
         # Update the experiment configuration with the current config.
         update(exp_cfg, cfg)
 

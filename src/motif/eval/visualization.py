@@ -15,13 +15,18 @@ evaluation_classes:
 """
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any, Generator, cast
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import xarray as xr
+from matplotlib.colors import Normalize
 from tqdm import tqdm
 
 from motif.data.grid_functions import crop_nan_border_numpy
+from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 from motif.eval.utils import format_tdelta
 
@@ -31,12 +36,12 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
 
     def __init__(
         self,
-        model_data,
-        parent_results_dir,
-        eval_fraction=1.0,
-        max_realizations_to_display=3,
-        cmap="viridis",
-        num_workers=10,
+        model_data: dict[str, dict],
+        parent_results_dir: str | Path,
+        eval_fraction: float = 1.0,
+        max_realizations_to_display: int = 3,
+        cmap: str = "viridis",
+        num_workers: int = 10,
         **kwargs,
     ):
         """
@@ -74,10 +79,18 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             rng = np.random.default_rng(seed=42)
             selected_indices = set(rng.choice(self.n_samples, size=n_samples, replace=False))
 
-            def samples_iterator():
+            def samples_iterator() -> Generator[
+                tuple[
+                    pd.DataFrame,
+                    dict[SourceIndex, xr.Dataset],
+                    dict[str, dict[SourceIndex, xr.Dataset]],
+                ],
+                None,
+                None,
+            ]:
                 return (
-                    (df, data)
-                    for i, (df, data) in enumerate(self.samples_iterator())
+                    (df, targets, preds)
+                    for i, (df, targets, preds) in enumerate(self.samples_iterator())
                     if i in selected_indices
                 )
 
@@ -91,10 +104,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             # Parallel processing
             with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
                 # Submit all tasks
-                futures = [
-                    executor.submit(self._process_sample, sample_df, sample_data)
-                    for sample_df, sample_data in samples
-                ]
+                futures = [executor.submit(self._process_sample, *sample) for sample in samples]
                 # Process results with progress bar
                 for future in tqdm(
                     as_completed(futures), desc="Evaluating samples", total=len(futures)
@@ -102,26 +112,30 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                     future.result()  # This will raise any exceptions that occurred
         else:
             # Sequential processing
-            for sample_df, sample_data in tqdm(
-                samples, desc="Evaluating samples", total=n_samples
-            ):
-                self._process_sample(sample_df, sample_data)
+            for sample in tqdm(samples, desc="Evaluating samples", total=n_samples):
+                self._process_sample(*sample)
 
-    def _process_sample(self, sample_df, sample_data):
+    def _process_sample(
+        self,
+        sample_df: pd.DataFrame,
+        targets: dict[SourceIndex, xr.Dataset],
+        preds: dict[str, dict[SourceIndex, xr.Dataset]],
+    ):
         """Process a single sample (helper method for parallel execution).
 
         Args:
             sample_df (pandas.DataFrame): DataFrame with sample metadata
-            sample_data (dict): Dictionary containing targets and predictions
+            targets (dict): Dict mapping source indices to target xarray datasets
+            preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
         """
         sample_index = sample_df["sample_index"].iloc[0]
         # Retrieve the number of channels from the first target source. We'll assume
         # all sources have the same number of channels.
-        channels = list(next(iter(sample_data["targets"].values())).data_vars)
+        channels = cast(list[str], list(next(iter(targets.values())).data_vars))
 
         for channel_idx in range(len(channels)):
             # Crop the padded borders
-            cropped_data = self.crop_padded_borders(sample_data, sample_df, channel_idx)
+            cropped_data = self.crop_padded_borders(targets, preds, sample_df, channel_idx)
 
             # Plot the data
             self.plot_sample(
@@ -131,11 +145,24 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                 channels[channel_idx],
             )
 
-    def crop_padded_borders(self, sample_data, sample_df, channel_idx):
+    def crop_padded_borders(
+        self,
+        targets: dict[SourceIndex, xr.Dataset],
+        preds: dict[str, dict[SourceIndex, xr.Dataset]],
+        sample_df: pd.DataFrame,
+        channel_idx: int,
+    ) -> tuple[
+        dict[SourceIndex, np.ndarray],
+        dict[SourceIndex, np.ndarray],
+        dict[SourceIndex, np.ndarray],
+        dict[SourceIndex, np.ndarray],
+        dict[str, dict[SourceIndex, np.ndarray]],
+    ]:
         """Crops the padded borders in the sample data.
 
         Args:
-            sample_data (dict): Dictionary containing targets and predictions for each model
+            targets (dict): Dict mapping source indices to target xarray datasets
+            preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
             sample_df (pandas.DataFrame): DataFrame with sample metadata, indexed
                         by (source_name, source_index).
             channel_idx (int): Index of the channel to process.
@@ -158,9 +185,9 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         target_sources = {}  # (src_name, src_index) -> target data
         lats, lons = {}, {}  # (src_name, src_index) -> coordinates data
         predictions = {model_id: {} for model_id in self.model_data}
-        for src, target_data in sample_data["targets"].items():
+        for src, target_data in targets.items():
             # Get the availability flag (-1: missing, 0: target, 1: available)
-            avail = sample_df.loc[src, "avail"]
+            avail = sample_df.loc[(src.name, src.index), "avail"]
             if avail == -1:
                 continue
             # Get the coordinates data: latitude and longitude (will be used for the ticklabels)
@@ -170,12 +197,9 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             channel = list(target_data.data_vars)[channel_idx]
             target_arr = target_data[channel].values
             # Gather all models' predictions for that source
-            preds = [
-                sample_data["predictions"][model_id][src][channel].values
-                for model_id in self.model_data
-            ]
+            preds_list = [preds[model_id][src][channel].values for model_id in self.model_data]
             # Crop all borders all at once using the target as reference
-            out = crop_nan_border_numpy(target_arr, [target_arr, src_lat, src_lon] + preds)
+            out = crop_nan_border_numpy(target_arr, [target_arr, src_lat, src_lon] + preds_list)
             lats[src] = out[1]
             lons[src] = out[2]
             # Store the channel data either as target or available source
@@ -189,7 +213,19 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
 
         return available_sources, target_sources, lats, lons, predictions
 
-    def plot_sample(self, sample_index, cropped_data, sample_df, channel):
+    def plot_sample(
+        self,
+        sample_index: int,
+        cropped_data: tuple[
+            dict[SourceIndex, np.ndarray],
+            dict[SourceIndex, np.ndarray],
+            dict[SourceIndex, np.ndarray],
+            dict[SourceIndex, np.ndarray],
+            dict[str, dict[SourceIndex, np.ndarray]],
+        ],
+        sample_df: pd.DataFrame,
+        channel: str,
+    ):
         """Plots the targets and predictions for a single sample.
 
         Args:
@@ -217,30 +253,32 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         # Map {(src_name, src_index) --> mpl Normalize}
         norms = {}
         # First, targets
-        for src_name, src_index in target_sources.keys():
+        for src in target_sources.keys():
+            src_name, src_index = src.name, src.index
             display_name = self._display_src_name(src_name)
-            channel_data = target_sources[(src_name, src_index)]
+            channel_data = target_sources[src]
             # Extract the min and max values to create a colormap
             vmin, vmax = np.nanmin(channel_data), np.nanmax(channel_data)
-            norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-            norms[(src_name, src_index)] = norm
+            norm = Normalize(vmin=vmin, vmax=vmax)
+            norms[src] = norm
 
             ax = axes[0, col_cnt]
             ax.imshow(channel_data, aspect="auto", cmap=self.cmap, norm=norm)
             dt = format_tdelta(sample_df.loc[(src_name, src_index), "dt"])
-            ax.set_title(f"Target: {display_name} $\delta t=${dt}")
-            self._set_coords_as_ticks(ax, lats[(src_name, src_index)], lons[(src_name, src_index)])
+            ax.set_title(f"Target: {display_name} $\\delta t=${dt}")
+            self._set_coords_as_ticks(ax, lats[src], lons[src])
             col_cnt += 1
 
         # Available sources
-        for src_name, src_index in available_sources.keys():
+        for src in available_sources.keys():
+            src_name, src_index = src.name, src.index
             display_name = self._display_src_name(src_name)
-            channel_data = available_sources[(src_name, src_index)]
+            channel_data = available_sources[src]
             ax = axes[0, col_cnt]
             ax.imshow(channel_data, aspect="auto", cmap=self.cmap)
             dt = format_tdelta(sample_df.loc[(src_name, src_index), "dt"])
-            ax.set_title(f"{display_name} $\delta t=${dt}")
-            self._set_coords_as_ticks(ax, lats[(src_name, src_index)], lons[(src_name, src_index)])
+            ax.set_title(f"{display_name} $\\delta t=${dt}")
+            self._set_coords_as_ticks(ax, lats[src], lons[src])
             col_cnt += 1
 
         # Hide the axes that are not used
@@ -250,15 +288,16 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         # ------- SUBSEQUENT ROWS: Model predictions / realizations -----
         for k, model_id in enumerate(self.model_data):
             col_cnt = 0
-            for src_name, src_index in target_sources.keys():
+            for src in target_sources.keys():
+                src_name = src.name
                 display_name = self._display_src_name(src_name)
                 # If the prediction contains one more dim than the target, we
                 # assume the first dim is the realization index. In this case,
                 # we'll plot one realization per column, up to the maximum number
                 # of columns. If there are the same number of dims, there's only
                 # a single prediction to plot.
-                pred_data = predictions[model_id][(src_name, src_index)]
-                if len(pred_data.shape) == len(target_sources[(src_name, src_index)].shape) + 1:
+                pred_data = predictions[model_id][src]
+                if len(pred_data.shape) == len(target_sources[src].shape) + 1:
                     # Multiple realizations, plot only the first ones
                     for realization_idx in range(
                         min(self.max_realizations_to_display, pred_data.shape[0])
@@ -269,12 +308,10 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                             pred_realization,
                             aspect="auto",
                             cmap=self.cmap,
-                            norm=norms[(src_name, src_index)],
+                            norm=norms[src],
                         )
                         ax.set_title(f"{display_name} - {model_id}")
-                        self._set_coords_as_ticks(
-                            ax, lats[(src_name, src_index)], lons[(src_name, src_index)]
-                        )
+                        self._set_coords_as_ticks(ax, lats[src], lons[src])
                         col_cnt += 1
                 else:
                     # Single prediction, plot it directly
@@ -283,12 +320,10 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                         pred_data,
                         aspect="auto",
                         cmap=self.cmap,
-                        norm=norms[(src_name, src_index)],
+                        norm=norms[src],
                     )
                     ax.set_title(f"{display_name} - {model_id}")
-                    self._set_coords_as_ticks(
-                        ax, lats[(src_name, src_index)], lons[(src_name, src_index)]
-                    )
+                    self._set_coords_as_ticks(ax, lats[src], lons[src])
                     col_cnt += 1
             # Hide the axes that are not used
             for j in range(col_cnt, n_cols):
@@ -303,7 +338,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         plt.close(fig)
 
     @staticmethod
-    def _set_coords_as_ticks(ax, lats, lons, every_nth_pixel=30):
+    def _set_coords_as_ticks(ax: Any, lats: np.ndarray, lons: np.ndarray, every_nth_pixel=30):
         """Sets the latitude and longitude coordinates as ticks on the axes."""
         ax.set_xticks(range(0, len(lons[0]), every_nth_pixel))
         ax.set_xticklabels([f"{lon:.2f}" for lon in lons[0, ::every_nth_pixel]], rotation=45)

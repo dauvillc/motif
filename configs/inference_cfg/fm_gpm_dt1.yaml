@@ -4,6 +4,7 @@ pred_name: gpm_dt1
 lightning_module:
   cfg_scale: null
   n_realizations_per_sample: 10
+  mask_only_sources: ['tc_primed_pmw_GMI_GPM']
 
 dataset:
   val:
@@ -28,7 +29,7 @@ dataset:
           - tc_primed_pmw_SSMIS_F19
         # Min, max number of sources from the group
         availability: [1, 100]  # Means no upper limit
-    select_most_recent: true
+    select_most_recent: false
   test:
     dt_max: ${dataset.val.dt_max}
     min_ref_time_delta: ${dataset.val.min_ref_time_delta}

@@ -64,7 +64,7 @@ class MultiSourceWriter(BasePredictionWriter):
         """
         super().__init__(write_interval="batch")
         self.root_dir = Path(root_dir)
-        self.dt_min, self.dt_max = dataset.dt_min, dataset.dt_max
+        self.dt_min, self.dt_max = dataset.dt_min_norm, dataset.dt_max_norm
         self.dataset = dataset
         self.mode = mode
         if not root_dir.exists():

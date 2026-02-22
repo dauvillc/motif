@@ -45,6 +45,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from time import localtime, strftime
+from typing import Any, cast
 
 import hydra
 import pandas as pd
@@ -165,7 +166,7 @@ class EvalJob(submitit.helpers.Checkpointable):
         print(f"Evaluation '{eval_name}' completed. Results saved to {parent_results_dir}")
 
 
-def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
+def _make_executor(cfg: dict[str, Any]) -> submitit.AutoExecutor:
     # Where submitit writes logs/stdout/err and its internal state
     folder = Path("submitit") / (
         "eval_" + cfg["eval_name"] + f"_{strftime('%Y%m%d_%H-%M-%S', localtime())}"
@@ -178,13 +179,13 @@ def _make_executor(cfg: DictConfig) -> submitit.AutoExecutor:
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="eval")
-def main(cfg: DictConfig):
+def main(raw_cfg: DictConfig):
     # Enable the full errors in Hydra
     os.environ["HYDRA_FULL_ERROR"] = "1"
 
     OmegaConf.register_new_resolver("eval", eval)
     OmegaConf.register_new_resolver("nan", lambda: float("nan"))
-    cfg = OmegaConf.to_object(cfg)
+    cfg = cast(dict[str, Any], OmegaConf.to_object(raw_cfg))
 
     # Create the job object and submit it to the auto executor.
     job = EvalJob(cfg)

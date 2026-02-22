@@ -1,19 +1,22 @@
 """Implements the QuantativeEvaluation class."""
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import seaborn as sns
+import xarray as xr
 from tqdm import tqdm
 
 from motif.data.grid_functions import crop_nan_border_numpy
+from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 
 
-def flatten_and_ignore_nans(pred, target):
+def flatten_and_ignore_nans(pred: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Given an array of predictions and targets, flattens them along all dimensions
     except the first one (realizations), and ignores NaNs in the target array."""
     # Create a mask of valid (non-NaN) entries in the target array
@@ -37,7 +40,13 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
     models are generated and saved to disk.
     """
 
-    def __init__(self, model_data, parent_results_dir, num_workers=1, **kwargs):
+    def __init__(
+        self,
+        model_data: dict[str, dict],
+        parent_results_dir: str | Path,
+        num_workers: int = 1,
+        **kwargs,
+    ):
         """
         Args:
             model_data (dict): Dictionary mapping model_ids to model specifications.
@@ -96,10 +105,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             results = []
             with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
                 # Submit all tasks
-                futures = [
-                    executor.submit(self._process_sample, sample_df, sample_data)
-                    for sample_df, sample_data in samples
-                ]
+                futures = [executor.submit(self._process_sample, *sample) for sample in samples]
                 # Process results with progress bar
                 for future in tqdm(
                     as_completed(futures), desc="Evaluating samples", total=len(futures)
@@ -109,39 +115,44 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         else:
             # Sequential processing
             results = []
-            for sample_df, sample_data in tqdm(
-                samples, desc="Evaluating samples", total=self.n_samples
-            ):
-                sample_results = self._process_sample(sample_df, sample_data)
+            for sample in tqdm(samples, desc="Evaluating samples", total=self.n_samples):
+                sample_results = self._process_sample(*sample)
                 results.extend(sample_results)
 
         # Concatenate all results into a single DataFrame
         return pd.DataFrame(results)
 
-    def _process_sample(self, sample_df, sample_data):
+    def _process_sample(
+        self,
+        sample_df: pd.DataFrame,
+        targets: dict[SourceIndex, xr.Dataset],
+        preds: dict[str, dict[SourceIndex, xr.Dataset]],
+    ) -> list[dict]:
         """Process a single sample and return the results (helper method for parallel execution).
 
         Args:
             sample_df (pandas.DataFrame): DataFrame with sample metadata
-            sample_data (dict): Dictionary containing targets and predictions
+            targets (dict): Dict mapping source indices to target xarray datasets
+            preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
 
         Returns:
             list: List of result dictionaries for this sample
         """
         results = []
         sample_index = sample_df["sample_index"].iloc[0]
-        for src, target_data in sample_data["targets"].items():
-            source_name, source_index = src
+        for src, target_data in targets.items():
+            source_name, source_index = src.name, src.index
+            src_tuple = (source_name, source_index)
             # We only evaluate sources that were masked, i.e. for which the availability flag
             # is 0 (1 meaning available but not masked, -1 meaning not available).
-            if sample_df.loc[src, "avail"] != 0:
+            if sample_df.loc[src_tuple, "avail"] != 0:
                 continue
             # Retrieve the list of channels for the source
             channels = list(target_data.data_vars.keys())
             # Evaluate each model's predictions against the target data
             # on every channel.
             for model_id in self.model_data:
-                pred_data = sample_data["predictions"][model_id][src]
+                pred_data = preds[model_id][src]
                 for channel in channels:
                     pred_data_channel = pred_data[channel].values
                     target_data_channel = target_data[channel].values
@@ -182,7 +193,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
 
         return results
 
-    def _save_aggregated_results(self, results):
+    def _save_aggregated_results(self, results: pd.DataFrame) -> pd.DataFrame:
         """Computes and saves the aggregated results for all models.
 
         Args:
@@ -248,7 +259,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         print(f"Aggregated results saved to: {agg_results_file}")
         return agg_results
 
-    def _plot_results(self, results, agg_results):
+    def _plot_results(self, results: pd.DataFrame, agg_results: pd.DataFrame):
         """Generates and saves plots comparing the models based on the evaluation results.
         Args:
             results (pd.DataFrame): DataFrame containing the evaluation results.
@@ -488,7 +499,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             print(f"RMSE plot saved to: {rmse_plot_file}")
 
     @staticmethod
-    def _compute_mae(pred_data, target_data):
+    def _compute_mae(pred_data: np.ndarray, target_data: np.ndarray) -> float:
         """Computes the Mean Absolute Error (MAE) between the predicted ensemble mean
         and targets."""
         pred_flat, target_flat = flatten_and_ignore_nans(pred_data, target_data)
@@ -497,7 +508,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         return np.abs((pred_flat - target_flat)).mean().item()
 
     @staticmethod
-    def _compute_mse(pred_data, target_data):
+    def _compute_mse(pred_data: np.ndarray, target_data: np.ndarray) -> float:
         """Computes the Mean Squared Error (MSE) between predicted ensemble mean
         and targets."""
         pred_flat, target_flat = flatten_and_ignore_nans(pred_data, target_data)
@@ -506,7 +517,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         return ((pred_flat - target_flat) ** 2).mean().item()
 
     @staticmethod
-    def _compute_crps(pred_data, target_data):
+    def _compute_crps(pred_data: np.ndarray, target_data: np.ndarray) -> float:
         """Computes the Continuous Ranked Probability Score (CRPS) between predictions and targets.
         For deterministic predictions, this is equivalent to the MAE.
 
@@ -525,7 +536,9 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         return crps.item()
 
     @staticmethod
-    def _compute_err_and_member_var(pred_data, target_data):
+    def _compute_err_and_member_var(
+        pred_data: np.ndarray, target_data: np.ndarray
+    ) -> tuple[float, float]:
         """Computes the unbiased MSE between the ensemble mean and the target,
         as well as the ensemble member variance.
 
