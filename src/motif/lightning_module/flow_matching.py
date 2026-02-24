@@ -242,15 +242,13 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         # avail_flags[s][i] == 0 if the source s should be masked.
         device = next(self.parameters()).device
 
-        # Second step: create a copy of the input dict and update the availability flag
-        # to 0 for the masked sources.
+        # Second step: for the selected sources:
+        # - copy the data that will be modified by the masking
+        # - set the avail flag and mask to 0
         masked_x = {}
         for src, data in x.items():
-            # Copy the data to avoid modifying the original dict
-            masked_data = data.clone()
-            # Update the availability flag to that after masking.
+            masked_data = data.clone_values()
             masked_data.avail = avail_flags[src]
-            # Set the availability mask to 0 everywhere for noised sources.
             masked_data.avail_mask[masked_data.avail == 0] = 0
             masked_x[src] = masked_data
 
@@ -273,7 +271,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         # and the diffusion timestep at which the source was masked.
         path_samples = {}
         for src, masked_data in masked_x.items():
-            # NOISING
+            # Sample the diffusion step
             batch_size = masked_data.values.shape[0]
             if pure_noise:
                 t = torch.zeros(batch_size, device=device)  # Means x_t = x_0
@@ -292,6 +290,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                     raise ValueError(
                         f"Invalid training_time_sampling: {self.training_time_sampling}"
                     )
+
             # Generate random noise with the same shape as the values
             noise = torch.randn(
                 masked_data.values.shape,
@@ -299,14 +298,12 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 dtype=masked_data.values.dtype,
             ).to(device)
             noise = self.noise_scale * noise
-            # The sources should be noised if they are masked.
             should_mask = avail_flags[src] == 0
             # Compute the noised values associated with the diffusion timesteps
-            path_sample = self.fm_path.sample(
-                t=t, x_0=noise, x_1=masked_data.values.detach().clone()
-            )
+            path_sample = self.fm_path.sample(t=t, x_0=noise, x_1=masked_data.values)
             path_samples[src] = path_sample
             masked_data.values[should_mask] = path_sample.x_t[should_mask]
+
             # Save the diffusion timesteps at which the source was masked. For unnoised sources,
             # the diffusion step is set to 1.
             masked_data.diffusion_t = torch.where(should_mask, t, torch.ones_like(t))

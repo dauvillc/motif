@@ -169,7 +169,7 @@ class MultisourceDeterministicReconstructor(MultisourceAbstractReconstructor):
         masked_x = {}
         for src, data in x.items():
             # Copy the data to avoid modifying the original dict
-            masked_data = data.clone()
+            masked_data = data.clone_values()
             avail_flag = avail_flags[src]
             masked_data.avail = avail_flag
             # Set the availability mask to 0 everywhere for noised sources.

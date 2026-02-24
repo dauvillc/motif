@@ -43,7 +43,7 @@ class MultisourceEulerODESolver:
         """
         device = next(iter(x_0.values())).device
         time_grid = time_grid.to(device)
-        x = {source: x_0[source].clone().to(device) for source in x_0}
+        x = {source: x_0[source].to(device) for source in x_0}
 
         sol = {}
         # For each source, the returned solution will be a tensor of shape (T, B, C, ...)

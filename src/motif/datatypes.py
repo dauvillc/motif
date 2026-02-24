@@ -52,19 +52,20 @@ class SourceData(RawSourceData):
     diffusion_t: Tensor | None = None  # (B, diffusion_dim) or None
     pred_mean: Tensor | None = None  # (B, C, ...) or None
 
-    def clone(self) -> "SourceData":
-        """Returns a copy of this SourceData with all tensors cloned."""
+    def clone_values(self) -> "SourceData":
+        """Returns a copy of this SourceData in which the ingredients
+        that might be masked have been cloned."""
         return SourceData(
             values=self.values.clone(),
-            coords=self.coords.clone(),
-            dt=self.dt.clone(),
+            coords=self.coords,
+            dt=self.dt,
             avail=self.avail.clone(),
             avail_mask=self.avail_mask.clone(),
-            dist_to_center=self.dist_to_center.clone(),
-            landmask=self.landmask.clone(),
-            characs=self.characs.clone() if self.characs is not None else None,
-            diffusion_t=self.diffusion_t.clone() if self.diffusion_t is not None else None,
-            pred_mean=self.pred_mean.clone() if self.pred_mean is not None else None,
+            dist_to_center=self.dist_to_center,
+            landmask=self.landmask,
+            characs=self.characs if self.characs is not None else None,
+            diffusion_t=self.diffusion_t if self.diffusion_t is not None else None,
+            pred_mean=self.pred_mean if self.pred_mean is not None else None,
         )
 
     def shallow_clone(self) -> "SourceData":
