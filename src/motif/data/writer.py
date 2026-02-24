@@ -18,8 +18,7 @@ from motif.lightning_module.base_reconstructor import MultisourceAbstractReconst
 
 
 def atomic_to_netcdf(ds: xr.Dataset, path: Path):
-    """Atomic write to netcdf file. Absolutely written
-    by a LLM."""
+    """Atomic write to netcdf file. Absolutely written by an LLM."""
     tmp = path.with_suffix(path.suffix + f".{os.getpid()}.tmp")
     ds.to_netcdf(tmp)
     try:
