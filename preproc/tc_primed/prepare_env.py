@@ -211,7 +211,7 @@ def process_chunk(file_list, source_dest_dir, patch_size, check_exist, verbose=F
 def main(cfg):
     """Main function to process IR data."""
     cfg = OmegaConf.to_container(cfg, resolve=True)
-    patch_size = cfg.get("era5_patch_size", 201)  # Default 50 degrees at 0.25° resolution
+    patch_size = cfg.get("era5_patch_size", 121)  # Default 50 degrees at 0.25° resolution
     include_seasons = cfg.get("include_seasons", None)
 
     # Setup paths
