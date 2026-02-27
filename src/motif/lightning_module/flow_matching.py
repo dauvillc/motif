@@ -80,7 +80,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         normalize_coords_across_sources: bool = False,
         validation_dir: str | None = None,
         compute_metrics_every_k_batches: int = 10,
-        display_realizations_every_k_batches: int = 3,
+        compute_metrics_every_n_epochs: int = 5,
         n_realizations_per_sample: int = 3,
         metrics: Dict[str, Any] = {},
         use_modulation_in_output_layers: bool = False,
@@ -120,10 +120,10 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 If False, the coordinates will be normalized as sinusoïds.
             validation_dir (optional, str or Path): Directory where to save the validation plots.
                 If None, no plots will be saved.
+            compute_metrics_every_n_epochs (int): Number of epochs between two metric computations,
+                which require sampling with the ODE solver.
             compute_metrics_every_k_batches (int): Number of batches between two metric computations,
                 which require sampling with the ODE solver.
-            display_realizations_every_kp_batches (int): Number of metrics evaluations between
-                two realizations display.
             n_realizations_per_sample (int): Number of realizations to sample for each sample
                 in the prediction step.
             metrics (dict of str: callable): Metrics to compute during training and validation.
@@ -169,7 +169,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         self.training_time_sampling = training_time_sampling
         self.fm_path = CondOTProbPath()
         self.compute_metrics_every_k_batches = compute_metrics_every_k_batches
-        self.display_realizations_every_k_batches = display_realizations_every_k_batches
+        self.compute_metrics_every_n_epochs = compute_metrics_every_n_epochs
         self.n_realizations_per_sample = n_realizations_per_sample
         self.cfg_train_uncond_proba = cfg_train_uncond_proba
         self.cfg_scale = cfg_scale
@@ -478,16 +478,13 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
         # Compute the MSE between the true and predicted velocity fields loss for each source
         losses: MultisourceTensor = {}
         for src in pred:
-            y, y_pred = y_true[src], pred[src]
+            if src.name not in self.output_sources:
+                continue
+
             # Compute the pointwise loss for each source.
+            y, y_pred = y_true[src], pred[src]
             source_loss = (y_pred - y).pow(2)
-            # TODO: test
-            if self.use_det_model:
-                mean = masked_batch[src].pred_mean
-                if mean is None:
-                    raise ValueError("pred_mean is None in compute_loss with use_det_model = True")
-                true_dir = y - mean
-                true_dir = true_dir / (true_dir.norm(dim=-1, keepdim=True) + 1e-8)
+
             # Multiply by the loss mask
             source_loss_mask = loss_masks[src].unsqueeze(1).expand_as(source_loss)
             source_loss = source_loss * source_loss_mask
@@ -552,29 +549,25 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
             batch_size=raw_batch[list(raw_batch.keys())[0]].values.shape[0],
         )
 
+        # METRICS COMPUTATION: only every n epoch and only every k batch.
         if self.validation_dir is not None:
-            if batch_idx % self.compute_metrics_every_k_batches == 0:
-                # If we're displaying realizations, we'll sample 3 realizations. If we're
-                # simply computing the metrics, we'll sample 1 realization.
-                if batch_idx % self.display_realizations_every_k_batches == 0:
-                    n_real = 3
-                else:
-                    n_real = 1
+            if (
+                self.current_epoch % self.compute_metrics_every_n_epochs == 0
+                and batch_idx % self.compute_metrics_every_k_batches == 0
+            ):
                 # Sample with the ODE solver
-                sampling_dict = self.sample(preproc_batch, n_realizations_per_sample=n_real)
+                sampling_dict = self.sample(preproc_batch, n_realizations_per_sample=1)
                 sol = sampling_dict.pred
                 avail_flags = sampling_dict.avail
 
-                # If required, display the realizations
-                if batch_idx % self.display_realizations_every_k_batches == 0:
-                    display_realizations(
-                        GenerativePrediction(
-                            pred=sol, avail=avail_flags, time_grid=sampling_dict.time_grid
-                        ),
-                        raw_batch,
-                        self.validation_dir / f"realizations_{batch_idx}",
-                        display_fraction=1.0,
-                    )
+                display_realizations(
+                    GenerativePrediction(
+                        pred=sol, avail=avail_flags, time_grid=sampling_dict.time_grid
+                    ),
+                    raw_batch,
+                    self.validation_dir / f"realizations_{batch_idx}",
+                    display_fraction=1.0,
+                )
 
                 # Only keep one realization of the solution for the metrics.
                 sol = {source: sol[source][0] for source in sol}

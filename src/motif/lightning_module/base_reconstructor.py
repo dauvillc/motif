@@ -155,6 +155,14 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                     mask_only_sources.append(src_name)
         self.mask_only_sources = mask_only_sources
 
+        # Deduce a list of sources that should be output by the module.
+        if self.mask_only_sources:
+            self.output_sources = [
+                src_name for src_name in self.sources if src_name in self.mask_only_sources
+            ]
+        else:
+            self.output_sources = list(self.sources.keys())
+
         # Initialize the embedding layers
         self.init_embedding_layers(
             use_modulation_in_output_layers,
@@ -179,16 +187,25 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
         self.sourcetype_embeddings = nn.ModuleDict()
         self.sourcetype_output_projs = nn.ModuleDict()
         for source in self.sources.values():
-            # Only create the embedding layer for that source type if it doesn't exist yet
+            # Set the number of characteristic variables
             if source.type not in self.sourcetypes_characs_vars:
                 self.sourcetypes_characs_vars[source.type] = source.n_charac_variables()
-                n_input_channels = source.n_input_variables()
-                n_output_channels = source.n_output_variables()
-                # Whether to include a predicted mean in the embedding layer
-                pred_mean_channels = n_output_channels if self.use_det_model else 0
-                # Create the embedding layers for that source type depending on
-                # its dimensionality
-                if source.dim == 2:
+            else:
+                # Check that the number of characs variables is the same for all sources
+                # of the same type
+                if self.sourcetypes_characs_vars[source.type] != source.n_charac_variables():
+                    raise ValueError(
+                        "Number of characs variables is not "
+                        f"the same for all sources of type {source.type}"
+                    )
+            n_input_channels = source.n_input_variables()
+            n_output_channels = source.n_output_variables()
+            # Whether to include a predicted mean in the embedding layer
+            pred_mean_channels = n_output_channels if self.use_det_model else 0
+            # Create the embedding layers for that source type depending on
+            # its dimensionality
+            if source.dim == 2:
+                if source.type not in self.sourcetype_embeddings:
                     self.sourcetype_embeddings[source.type] = SourcetypeEmbedding2d(
                         n_input_channels,
                         self.patch_size,
@@ -201,27 +218,23 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
                         pred_mean_channels=pred_mean_channels,
                         conditioning_mlp_layers=conditioning_mlp_layers,
                     )
-                    self.sourcetype_output_projs[source.type] = SourcetypeProjection2d(
-                        self.dim,
-                        n_output_channels,
-                        self.patch_size,
-                        cond_dim=self.cond_dim,
-                        use_modulation=use_modulation_in_output_layers,
-                    )
-                else:
-                    raise NotImplementedError(
-                        f"Embedding layers for source type {source.type} with "
-                        f"dimensionality {source.dim} are not implemented yet."
-                    )
 
+                # If we're only masking certain sources, and the current source will never
+                # be masked, then we don't need an output proj layer for it.
+                if source.name in self.output_sources:
+                    if source.type not in self.sourcetype_output_projs:
+                        self.sourcetype_output_projs[source.type] = SourcetypeProjection2d(
+                            self.dim,
+                            n_output_channels,
+                            self.patch_size,
+                            cond_dim=self.cond_dim,
+                            use_modulation=use_modulation_in_output_layers,
+                        )
             else:
-                # Check that the number of characs variables is the same for all sources
-                # of the same type
-                if self.sourcetypes_characs_vars[source.type] != source.n_charac_variables():
-                    raise ValueError(
-                        "Number of characs variables is not "
-                        "the same for all sources of type {source.type}"
-                    )
+                raise NotImplementedError(
+                    f"Embedding layers for source type {source.type} with "
+                    f"dimensionality {source.dim} are not implemented yet."
+                )
 
     def embed(self, x: PreprocessedBatch) -> SourceEmbeddingDict:
         """Embeds all sources using their corresponding embedding layers.
@@ -364,14 +377,19 @@ class MultisourceAbstractReconstructor(MultisourceAbstractModule, ABC):
 
         pred: MultisourceTensor = {}
         for src, y in embed_out.items():
+            if src.name not in self.output_sources:
+                continue
             # Project from latent space to values space using the output layer
             # corresponding to the source type
             source_name = src.name
             src_type = self.sources[source_name].type
             pred[src] = self.sourcetype_output_projs[src_type](y)
-        # For 2D sources, remove the padding
-        for src, spatial_shape in spatial_shapes.items():
-            pred[src] = pred[src][..., : spatial_shape[0], : spatial_shape[1]]
+
+            # For 2D sources, remove the padding
+            shape = spatial_shapes[src]
+            if len(shape) == 2:
+                H, W = shape
+                pred[src] = pred[src][..., :H, :W]
 
         return pred
 

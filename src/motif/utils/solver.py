@@ -17,7 +17,8 @@ class MultisourceEulerODESolver:
         """
         Args:
             vf_func (Callable): Function that computes the vector field u(x, t)
-                for each source.
+                for each source. If a source is not present in the returned dict, it is assumed
+                that the vector field for that source is zero.
         """
         self.vf_func = vf_func
 
@@ -55,7 +56,8 @@ class MultisourceEulerODESolver:
             u = self.vf_func(x, t0)
             for source in x:
                 dt = t1 - t0
-                x[source] = x[source] + dt * u[source]
+                if source in u:
+                    x[source] = x[source] + dt * u[source]
                 sol[source][k + 1] = x[source]
 
         if not return_intermediate_steps:
