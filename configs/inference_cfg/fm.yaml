@@ -14,10 +14,10 @@ dataset:
         sources: ['pmw']  # Includes all sources of type 'pmw'
         # Min, max number of sources from the group
         availability: [2, null]
-    select_most_recent: true
+    select_closest: true
   test:
     dt_max: ${dataset.val.dt_max}
     min_ref_time_delta: ${dataset.val.min_ref_time_delta}
     groups_availability: ${dataset.val.groups_availability}
-    select_most_recent: ${dataset.val.select_most_recent}
+    select_closest: ${dataset.val.select_closest}
 

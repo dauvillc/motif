@@ -27,7 +27,6 @@ def precompute_samples(
     df: pd.DataFrame,
     dt_min: pd.Timedelta,
     dt_max: pd.Timedelta,
-    select_most_recent: bool,
     verbose: bool = True,
 ) -> list[Tuple[pd.Timestamp, pd.DataFrame]]:
     """Precomputes the samples for a (subset of the) dataframe of
@@ -40,7 +39,6 @@ def precompute_samples(
         df (pd.DataFrame): DataFrame containing all samples.
         dt_min (int): The minimum time delta.
         dt_max (int): The maximum time delta.
-        select_most_recent (bool): Whether to select the most recent observation.
         verbose (bool): Whether to print progress messages.
 
     Returns:
@@ -60,9 +58,9 @@ def precompute_samples(
         time_mask = (sample_df["time"] <= max_t) & (sample_df["time"] > min_t)
         sample_df = sample_df[time_mask]
 
-        # If we're selecting the sources chronologically, we can pre-compute the sorted order.
-        if select_most_recent:
-            sample_df = sample_df.sort_values("time", ascending=False)
+        # Sort the rows by ascending time difference to the reference time,
+        # so that if we keep the first k rows in getitem, we keep the k closest observations.
+        sample_df = sample_df.sort_values("time", key=lambda x: abs(x - t0))
 
         sample_dfs.append((t0, sample_df))
     return sample_dfs
@@ -102,12 +100,13 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         dt_min_norm: float | None = None,
         dt_max_norm: float | None = None,
         groups_availability: dict = {},
-        select_most_recent: bool = False,
+        select_closest: bool = False,
         min_ref_time_delta: float = 0,
         num_workers: int = 0,
         data_augmentation: MultisourceDataAugmentation | None = None,
         limit_samples: int | float | None = None,
         seed: int = 42,
+        select_most_recent: bool = True,
     ):
         """
         Args:
@@ -157,9 +156,8 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 Note 1: The maximum number can be set to None to have no limit.
                 Note 2: Instead of writing the full source names, one can also use source types
                     to include all sources of a given type.
-            select_most_recent (bool): If True, prioritize the most recent observations within
-                a source when there are too many available sources of that type. Otherwise,
-                prioritize randomly.
+            select_closest (bool): If True, keeps the source that is closest to the reference time
+                when selecting only a subset of sources within a group.
             min_ref_time_delta (float): The minimum time delta between two reference times
                 of the same storm (ie between two samples of the same storm).
             num_workers (int): If > 1, number of workers to use for parallel loading of the data.
@@ -170,6 +168,7 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 If an integer, will keep at most limit_samples samples.
                 If a float between 0 and 1, will keep that fraction of the samples.
             seed (int): The seed to use for the random number generator.
+            select_most_recent (bool): Same as select_closest, here for backwards compatibility.
         """
 
         self.dataset_dir = Path(dataset_dir)
@@ -178,9 +177,9 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         self.split = split
         self.groups_availability = groups_availability
         self.min_ref_time_delta = min_ref_time_delta
-        self.select_most_recent = select_most_recent
         self.data_augmentation = data_augmentation
         self.rng = np.random.default_rng(seed)
+        self.select_closest = select_closest or select_most_recent
 
         print(f"{split}: Browsing requested sources and loading metadata...")
         # Load and merge individual source metadata files
@@ -332,7 +331,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 self.df,
                 self.dt_min,
                 self.dt_max,
-                self.select_most_recent,
             )
         else:
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -344,7 +342,6 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                     [self.df] * len(chunks),
                     [self.dt_min] * len(chunks),
                     [self.dt_max] * len(chunks),
-                    [self.select_most_recent] * len(chunks),
                     [True] + [False] * (len(chunks) - 1),  # only the first chunk is verbose
                 )
                 self.samples = [item for sublist in results for item in sublist]
@@ -403,14 +400,14 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         """
         t0, sample_df = self.samples[idx]
 
-        # If selecting the sources randomly, we do it here so that if __getitem__(i) is called
-        # twice, it may yield different results.
-        if not self.select_most_recent:
+        # If selecting the sources randomly, shuffle the rows of the sample dataframe
+        # so that keeping the first k of a group keeps a random subset of it.
+        if not self.select_closest:
             sample_df = sample_df.sample(frac=1, random_state=int(self.rng.integers(0, 1_000_000)))
 
         # Group availability criterion: if there are too many sources from a given group,
         # we only keep the maximum allowed number of sources from that group.
-        # (Random if select_most_recent is False due to above, otherwise most recent.)
+        # (Random if select_closest is False due to above)
         for group_avail_dict in self.groups_availability.values():
             max_avail = group_avail_dict["availability"][1]  # How many sources to keep
             group = group_avail_dict["sources"]  # The sources in the group

@@ -6,7 +6,13 @@ defaults:
   - setup: ???
   - _self_
 
-disable_checks: false  # Whether to disable sanity checks on the model info dataframes.
+# Whether and how to check that the info dataframes correspond across models
+# - "strict": must be exactly the same rows, i.e. exactly the same sources and avail flags
+#    across models for each sample. Means the models must be evaluated on exactly the same input
+#    and target sources.
+# - "targets_only": only checks that the target sources correspond across models, but
+#    allows differences in the input sources.
+checks_strictness: strict
 
 eval_name: ???
 models: ???

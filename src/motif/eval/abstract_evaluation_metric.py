@@ -13,28 +13,22 @@ import xarray as xr
 from motif.datatypes import SourceIndex
 
 
-def models_info_sanity_check(info_dfs: list[pd.DataFrame]):
+def models_info_sanity_check(info_dfs: list[pd.DataFrame], strictness: str = "strict"):
     """Performs a sanity check on the predictions info dataframes, to
-    ensure they were made on exactly the same data."""
+    ensure they were made on exactly the same data.
+    Args:
+        info_dfs (list of pandas.DataFrame): List of info dataframes, one for each model.
+        strictness (str): "strict", "targets_only" or "none".
+            Whether to perform strict checks on the info dataframes.
+            If "targets_only", only checks that the target sources correspond and that there
+            are no duplicates in the (sample_index, source_name, source_index) triples.
+    """
     # Check that all info_dfs have the same columns
     if not all(info_df.columns.equals(info_dfs[0].columns) for info_df in info_dfs):
         raise ValueError(
             "Found models with different columns in their info_df. "
             "Please ensure all models are evaluated on the same data."
         )
-    # Check that they have the same number of rows (samples and sources)
-    if not all(len(info_df) == len(info_dfs[0]) for info_df in info_dfs):
-        raise ValueError(
-            "Found models with different number of rows in their info_df. "
-            "This indicates different samples or different sources. "
-        )
-    # Check that you the sample_index, source_name, source_index columns are the same
-    for col in ["sample_index", "source_name", "source_index"]:
-        if not all(info_df[col].equals(info_dfs[0][col]) for info_df in info_dfs):
-            raise ValueError(
-                f"Found models with different values in the {col} column of their info_df. "
-                "Please ensure all models are evaluated on the same data."
-            )
     # Check that are no duplicates in the (sample_index, source_name, source_index) triples
     for info_df in info_dfs:
         if info_df.duplicated(subset=["sample_index", "source_name", "source_index"]).any():
@@ -43,14 +37,42 @@ def models_info_sanity_check(info_dfs: list[pd.DataFrame]):
                 "of the info_df. There may be a bug, as a a pair (src_name, src_index) should "
                 "be unique within a sample."
             )
-    # Check the availability flags match
-    for i in range(1, len(info_dfs)):
-        if not info_dfs[i]["avail"].equals(info_dfs[0]["avail"]):
+
+    if strictness == "strict":
+        # Check that they have the same number of rows (samples and sources)
+        if not all(len(info_df) == len(info_dfs[0]) for info_df in info_dfs):
             raise ValueError(
-                "Found models with different availability flags in their info_df. "
-                "Make sure the models' masking selection is identical between"
-                "the prediction runs."
+                "Found models with different number of rows in their info_df. "
+                "This indicates different samples or different sources. "
             )
+        # Check that you the sample_index, source_name, source_index columns are the same
+        for col in ["sample_index", "source_name", "source_index"]:
+            if not all(info_df[col].equals(info_dfs[0][col]) for info_df in info_dfs):
+                raise ValueError(
+                    f"Found models with different values in the {col} column of their info_df. "
+                    "Please ensure all models are evaluated on the same data."
+                )
+        # Check the availability flags match
+        for i in range(1, len(info_dfs)):
+            if not info_dfs[i]["avail"].equals(info_dfs[0]["avail"]):
+                raise ValueError(
+                    "Found models with different availability flags in their info_df. "
+                    "Make sure the models' masking selection is identical between"
+                    "the prediction runs."
+                )
+    else:
+        # Same checks, but only for the rows concerning the target sources (avail == 0)
+        target_info_dfs = [
+            info_df[info_df["avail"] == 0].reset_index(drop=True) for info_df in info_dfs
+        ]
+        if not all(len(info_df) == len(target_info_dfs[0]) for info_df in target_info_dfs):
+            raise ValueError("Found different number of target rows in the info_dfs. ")
+        for col in ["sample_index", "source_name", "source_index"]:
+            if not all(info_df[col].equals(target_info_dfs[0][col]) for info_df in target_info_dfs):
+                raise ValueError(
+                    f"Found models with different values in the {col} column of their info_df "
+                    "for the target rows."
+                )
 
 
 class AbstractMultisourceEvaluationMetric(abc.ABC):
@@ -64,7 +86,7 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
         parent_results_dir: str | Path,
         source_name_replacements: list[tuple[str, str]] | None = None,
         channel_replacements: list[tuple[str, str]] | None = None,
-        disable_checks: bool = False,
+        checks_strictness: str = "strict",
         num_workers: int = 1,
     ):
         """
@@ -85,7 +107,8 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
             channel_replacements (List of tuple of str, optional): List of (pattern, replacement)
                 substitutions to apply to channel names for display purposes. The replacement
                 is done using the re.sub function.
-            disable_checks (bool): If True, disables the sanity checks on the model data.
+            checks_strictness (str): "strict", "targets_only" or "none".
+                Whether to perform strict checks on the info dataframes of the models.
             num_workers (int): Here for compatibility.
         """
         self.id_name = id_name
@@ -105,8 +128,8 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
             info_df.sort_values(by=["sample_index", "source_name", "source_index"], inplace=True)
             info_df.reset_index(drop=True, inplace=True)
         # Perform sanity checks on the model data
-        if not disable_checks:
-            models_info_sanity_check(info_dfs)
+        if checks_strictness != "none":
+            models_info_sanity_check(info_dfs, strictness=checks_strictness)
 
         # Isolate a model-agnostic DataFrame with the columns that don't depend on the model:
         # sample_index, source_name, source_index, avail, dt
@@ -161,8 +184,12 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                     continue
                 targets_dict[src] = targets[src]
                 for model_id in self.model_data:
-                    model_preds = predictions[model_id][src]
+                    if src not in predictions[model_id]:
+                        # A source might included in the inputs/outputs of one the models
+                        # but not in the others.
+                        continue
                     # If the predictions include intermediate steps, keep only the last one
+                    model_preds = predictions[model_id][src]
                     if not include_intermediate_steps and "integration_step" in model_preds.dims:
                         model_preds = model_preds.isel(integration_step=-1)
                     preds_dict[model_id][src] = model_preds

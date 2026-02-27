@@ -14,4 +14,4 @@ sources:
     ["85.5", "89.0"],
     ["91.665", "89.0"]
   ]
-  disable_checks: ${disable_checks}
+  checks_strictness: ${checks_strictness}

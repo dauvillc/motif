@@ -35,8 +35,8 @@ train:
   min_ref_time_delta: 0
   # Number of workers for the data loading
   num_workers: ${dataloader.num_workers}
-  # By default, don't select the most recent sources
-  select_most_recent: false
+  # By default, don't select the closest sources to the reference time, but rather shuffle the sources so that if a subset of them is selected, that subset is random.
+  select_closest: false
   # Optionally limit the number of samples (for quicker experiments)
   limit_samples: null  # Either float (fraction) or int (number of samples)
   # Data augmentation to apply
@@ -57,7 +57,7 @@ val:
   groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}
-  select_most_recent: ${dataset.train.select_most_recent}
+  select_closest: ${dataset.train.select_closest}
   limit_samples: ${dataset.train.limit_samples}
   data_augmentation: ${data_augmentation}
 
@@ -76,5 +76,5 @@ test:
   groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}
-  select_most_recent: ${dataset.train.select_most_recent}
+  select_closest: ${dataset.train.select_closest}
   data_augmentation: ${data_augmentation}

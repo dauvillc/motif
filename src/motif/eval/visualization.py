@@ -196,8 +196,11 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             # We'll use the target as reference for cropping
             channel = list(target_data.data_vars)[channel_idx]
             target_arr = target_data[channel].values
-            # Gather all models' predictions for that source
-            preds_list = [preds[model_id][src][channel].values for model_id in self.model_data]
+            # Gather all models' predictions for that source if there are any.
+            preds_list = []
+            for model_id in self.model_data:
+                if src in preds[model_id]:
+                    preds_list.append(preds[model_id][src][channel].values)
             # Crop all borders all at once using the target as reference
             out = crop_nan_border_numpy(target_arr, [target_arr, src_lat, src_lon] + preds_list)
             lats[src] = out[1]
@@ -209,7 +212,8 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                 available_sources[src] = out[0]
             # Store the cropped predictions
             for k, model_id in enumerate(self.model_data):
-                predictions[model_id][src] = out[k + 3]
+                if src in preds[model_id]:
+                    predictions[model_id][src] = out[k + 3]
 
         return available_sources, target_sources, lats, lons, predictions
 
@@ -237,6 +241,15 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         """
         available_sources, target_sources, lats, lons, predictions = cropped_data
 
+        # Retrieve the timedelta of each available source, and sort them in ascending order.
+        avail_dts = {
+            src: cast(pd.Timedelta, sample_df.loc[(src.name, src.index), "dt"])
+            for src in available_sources.keys()
+        }
+        available_sources = dict(
+            sorted(available_sources.items(), key=lambda item: avail_dts[item[0]])
+        )
+
         # Create a figure with subplots: one row per model + 1 for the targets / available sources,
         # and one column per source (up to max_realizations_to_display).
         num_sources, num_models = len(sample_df), len(self.model_data)
@@ -254,8 +267,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         norms = {}
         # First, targets
         for src in target_sources.keys():
-            src_name, src_index = src.name, src.index
-            display_name = self._display_src_name(src_name)
+            display_name = self._display_src_name(src.name)
             channel_data = target_sources[src]
             # Extract the min and max values to create a colormap
             vmin, vmax = np.nanmin(channel_data), np.nanmax(channel_data)
@@ -264,20 +276,20 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
 
             ax = axes[0, col_cnt]
             ax.imshow(channel_data, aspect="auto", cmap=self.cmap, norm=norm)
-            dt = format_tdelta(sample_df.loc[(src_name, src_index), "dt"])
-            ax.set_title(f"Target: {display_name} $\\delta t=${dt}")
+            dt = cast(pd.Timedelta, sample_df.loc[(src.name, src.index), "dt"])
+            dt_str = format_tdelta(dt)
+            ax.set_title(f"Target: {display_name} $\\delta t=${dt_str}")
             self._set_coords_as_ticks(ax, lats[src], lons[src])
             col_cnt += 1
 
         # Available sources
         for src in available_sources.keys():
-            src_name, src_index = src.name, src.index
-            display_name = self._display_src_name(src_name)
+            display_name = self._display_src_name(src.name)
             channel_data = available_sources[src]
             ax = axes[0, col_cnt]
             ax.imshow(channel_data, aspect="auto", cmap=self.cmap)
-            dt = format_tdelta(sample_df.loc[(src_name, src_index), "dt"])
-            ax.set_title(f"{display_name} $\\delta t=${dt}")
+            dt_str = format_tdelta(avail_dts[src])
+            ax.set_title(f"{display_name} $\\delta t=${dt_str}")
             self._set_coords_as_ticks(ax, lats[src], lons[src])
             col_cnt += 1
 

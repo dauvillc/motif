@@ -68,6 +68,11 @@ class MultiSourceWriter(BasePredictionWriter):
         self.mode = mode
         if not root_dir.exists():
             self.root_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            if mode == "w":
+                # Remove any existing info files in the root_dir
+                for file in self.root_dir.glob("info_*.csv"):
+                    file.unlink()
 
     def setup(self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str):
         self.rank = str(trainer.global_rank)

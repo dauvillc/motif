@@ -1,9 +1,10 @@
 # @package _global_
-pred_name: gpm_dt1_single
+pred_name: gpm_dt1_multi
 
 lightning_module:
   cfg_scale: null
   n_realizations_per_sample: 10
+  mask_only_sources: ['tc_primed_pmw_GMI_GPM']
 
 dataset:
   val:
@@ -14,6 +15,7 @@ dataset:
       gpm:
         sources: ['tc_primed_pmw_GMI_GPM'] 
         availability: [1, 1]
+      # At least 2 input pmw sources available.
       pmw:
         sources:
           - tc_primed_pmw_AMSR2_GCOMW1
@@ -27,11 +29,11 @@ dataset:
           - tc_primed_pmw_SSMIS_F18
           - tc_primed_pmw_SSMIS_F19
         # Min, max number of sources from the group
-        availability: [1, 1]
-    select_most_recent: true
+        availability: [2, 1000]  # Means no upper limit
+    select_closest: false
   test:
     dt_max: ${dataset.val.dt_max}
     min_ref_time_delta: ${dataset.val.min_ref_time_delta}
     groups_availability: ${dataset.val.groups_availability}
-    select_most_recent: ${dataset.val.select_most_recent}
+    select_closest: ${dataset.val.select_closest}
 
