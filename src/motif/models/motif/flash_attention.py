@@ -103,7 +103,8 @@ class SpatiotemporalFlashAttention(nn.Module):
         qc = rearrange(qc, "B ... L (H D) -> B ... H L D", H=self.num_heads)
         kc = rearrange(kc, "B ... S (H D) -> B ... H S D", H=self.num_heads)
         v = rearrange(v, "B ... S (H D) -> B ... H S D", H=self.num_heads)
-        attn_mask = rearrange(attn_mask, "B ... L S -> B ... 1 L S")
+        if attn_mask is not None:
+            attn_mask = rearrange(attn_mask, "B ... L S -> B ... 1 L S")
 
         # Expand alpha to be broadcastable with the queries
         # -> view as (1, ..., H, 1, 1)
