@@ -404,6 +404,8 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 sol = solver.solve(
                     x_0, time_grid, return_intermediate_steps=return_intermediate_steps
                 )
+                # Only keep the sources that are output by the forward method
+                sol = {src: sol[src] for src in sol if src.name in self.output_sources}
 
                 # If using a deterministic model, the solution of the ODE is the residual
                 # between the predicted mean and the actual sample. We need to add back the
@@ -421,7 +423,7 @@ class MultisourceFlowMatchingReconstructor(MultisourceAbstractReconstructor):
                 all_sols.append(sol)
 
             all_sols = {
-                src: torch.stack([sol[src] for sol in all_sols]) for src in batch
+                src: torch.stack([sol[src] for sol in all_sols]) for src in all_sols[0]
             }  # Shape (R, T, B, C, ...) or (R, B, C, ...) depending on return_intermediate_steps
 
             return GenerativePrediction(

@@ -217,11 +217,12 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
             info_df = info_df[info_df["sample_index"] == sample_index]
             root_dir = model_spec["root_dir"]
 
-            # Isolate the unique pairs (source_name, source_index) for this model
-            source_pairs = info_df[["source_name", "source_index"]].drop_duplicates()
+            # Get the pairs (source_name, source_index) for this model
+            source_pairs = info_df[["source_name", "source_index", "avail"]].drop_duplicates()
             for _, row in source_pairs.iterrows():
                 src_name, index = row["source_name"], row["source_index"]
                 src = SourceIndex(name=src_name, index=index)
+
                 # Load targets for the first model only (since they are the same for all)
                 if i == 0:
                     target_path = (
@@ -231,12 +232,17 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                     targets[src] = apply_channel_name_replacements(
                         targets_ds, self.channel_replacements
                     )
-                # Load predictions for all models
-                pred_path = root_dir / "predictions" / src_name / str(index) / f"{sample_index}.nc"
-                predictions_ds = xr.open_dataset(pred_path)
-                predictions[model_id][src] = apply_channel_name_replacements(
-                    predictions_ds, self.channel_replacements
-                )
+
+                # Load the predictions. These only exist for masked
+                # sources, i.e. when the availability flag is 0.
+                if row["avail"] == 0:
+                    pred_path = (
+                        root_dir / "predictions" / src_name / str(index) / f"{sample_index}.nc"
+                    )
+                    predictions_ds = xr.open_dataset(pred_path)
+                    predictions[model_id][src] = apply_channel_name_replacements(
+                        predictions_ds, self.channel_replacements
+                    )
 
         return targets, predictions
 
