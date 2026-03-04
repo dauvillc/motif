@@ -37,8 +37,8 @@ def precompute_samples(
     Args:
         ref_df (pd.DataFrame): The reference dataframe.
         df (pd.DataFrame): DataFrame containing all samples.
-        dt_min (int): The minimum time delta.
-        dt_max (int): The maximum time delta.
+        dt_min (pd.Timedelta): The minimum time delta.
+        dt_max (pd.Timedelta): The maximum time delta.
         verbose (bool): Whether to print progress messages.
 
     Returns:
@@ -55,7 +55,7 @@ def precompute_samples(
         # defined by the reference time t0 and dt_min, dt_max
         min_t = t0 + dt_min
         max_t = t0 + dt_max
-        time_mask = (sample_df["time"] <= max_t) & (sample_df["time"] > min_t)
+        time_mask = (sample_df["time"] <= max_t) & (sample_df["time"] >= min_t)
         sample_df = sample_df[time_mask]
 
         # Sort the rows by ascending time difference to the reference time,

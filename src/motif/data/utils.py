@@ -93,7 +93,7 @@ def _is_source_available(ref_obs, sid_mask, source_mask, time_arr, dt_min, dt_ma
     # Isolate the times of observations corresponding to the correct sid and source
     times = time_arr[sid_mask[sid] & source_mask]
     # Check for times that respect the time delta constraint
-    return ((times > min_t) & (times <= max_t)).sum().item()
+    return ((times >= min_t) & (times <= max_t)).sum().item()
 
 
 def _source_availability(df, sid_mask, source_mask, time_arr, dt_min, dt_max):
