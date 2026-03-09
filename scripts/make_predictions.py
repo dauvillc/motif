@@ -5,12 +5,12 @@ from typing import Any, cast
 
 import hydra
 import lightning.pytorch as pl
-import submitit
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
+import submitit
 from motif.data.collate_fn import multi_source_collate_fn
 from motif.data.writer import MultiSourceWriter
 from motif.utils.cfg_utils import update
@@ -56,7 +56,7 @@ class PredictJob(submitit.helpers.Checkpointable):
         # Every set of predictions will be given a name.
         pred_name = cfg["pred_name"]
         # Create the results directory
-        run_results_dir = Path(cfg["paths"]["predictions"]) / run_id / pred_name
+        run_results_dir = Path(cfg["paths"]["predictions"]) / run_id / pred_name / split
         # Remove run_results_dir / info.csv if it exists
         if (run_results_dir / "info.csv").exists():
             (run_results_dir / "info.csv").unlink()
