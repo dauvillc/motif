@@ -15,6 +15,9 @@ train:
   dt_max: ???
   dt_min_norm: null
   dt_max_norm: null
+  # Defines a set of sources so that only these can be used as reference to define samples
+  # If null, all sources can be used as reference.
+  reference_sources: null
 
   # Availabiity criteria by groups of sources: for each group, specify
   # the list of sources in the group, and the (min, max) number of
@@ -54,6 +57,7 @@ val:
   dt_max: ${dataset.train.dt_max}
   dt_min_norm: ${dataset.train.dt_min_norm}
   dt_max_norm: ${dataset.train.dt_max_norm}
+  reference_sources: ${dataset.train.reference_sources}
   groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}
@@ -73,6 +77,7 @@ test:
   dt_max: ${dataset.train.dt_max}
   dt_min_norm: ${dataset.train.dt_min_norm}
   dt_max_norm: ${dataset.train.dt_max_norm}
+  reference_sources: ${dataset.train.reference_sources}
   groups_availability: ${dataset.train.groups_availability}
   min_ref_time_delta: ${dataset.train.min_ref_time_delta}
   num_workers: ${dataset.train.num_workers}

@@ -96,9 +96,10 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         split: str,
         included_variables_dict: dict,
         dt_min: float,
-        dt_max: float,
+        dt_max: float | None = None,
         dt_min_norm: float | None = None,
         dt_max_norm: float | None = None,
+        reference_sources: List[str] | None = None,
         groups_availability: dict = {},
         select_closest: bool = False,
         min_ref_time_delta: float = 0,
@@ -132,12 +133,16 @@ class MultiSourceDataset(torch.utils.data.Dataset):
                 data but will be flagged as input-only in the Source object.
             dt_min (float): The minimum time delta (in hours) between the reference time
                 and the observation time.
-            dt_max (float): The maximum time delta (in hours) between the reference time
-                and the observation time.
-            dt_min_norm (float or None): The minimum time delta (in hours) used for
+            dt_max (float | None): The maximum time delta (in hours) between the reference time
+                and the observation time. If None, no maximum is applied.
+                If None, will be set to -dt_min to create a symmetric window.
+                If None and dt_min is positive, raises an error.
+            dt_min_norm (float | None): The minimum time delta (in hours) used for
                 normalizing the time delta. If None, dt_min is used.
-            dt_max_norm (float or None): The maximum time delta (in hours) used for
-                normalizing the time delta. If None, dt_max is used.
+            dt_max_norm (float | None): The maximum time delta (in hours) used for
+                normalizing thetitle="Model" time delta. If None, dt_max is used.
+            reference_sources (list of str or None): If not None, list of source names
+                to use as reference to define the samples.
             groups_availability (Dict of str to dict): Dict defining groups of sources.
                 For each group, a minimum and a maximum number of sources from that group
                 can be set, which will be used to filter the samples.
@@ -225,6 +230,10 @@ class MultiSourceDataset(torch.utils.data.Dataset):
             raise ValueError("No samples found for the given sources.")
 
         # Time delta settings
+        if dt_max is None:
+            if dt_min > 0:
+                raise ValueError("If dt_max is None, dt_min must be non-positive.")
+            dt_max = -dt_min
         self.dt_min = pd.Timedelta(dt_min, unit="h")
         self.dt_max = pd.Timedelta(dt_max, unit="h")
         if dt_min_norm is None:
@@ -286,6 +295,11 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # We can now build the reference dataframe:
         self.reference_df = self.df[mask][["sid", "time", "source_name", "intensity"]]
         self.reference_df["n_available_sources"] = available_sources_count[mask]
+
+        # Potentially only define the samples based on a subset of reference sources
+        if reference_sources is not None:
+            ref_source_mask = self.reference_df["source_name"].isin(reference_sources)
+            self.reference_df = self.reference_df[ref_source_mask]
 
         # Avoid duplicated samples if two observations are at the exact same time
         self.reference_df = self.reference_df.drop_duplicates(["sid", "time"])

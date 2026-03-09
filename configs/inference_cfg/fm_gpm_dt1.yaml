@@ -10,6 +10,7 @@ dataset:
   val:
     dt_min: -0.5
     dt_max: 0.5
+    reference_sources: ['tc_primed_pmw_GMI_GPM']
     min_ref_time_delta: 1
     groups_availability:
       gpm:
@@ -34,5 +35,6 @@ dataset:
     dt_max: ${dataset.val.dt_max}
     min_ref_time_delta: ${dataset.val.min_ref_time_delta}
     groups_availability: ${dataset.val.groups_availability}
+    reference_sources: ${dataset.val.reference_sources}
     select_closest: ${dataset.val.select_closest}
 
