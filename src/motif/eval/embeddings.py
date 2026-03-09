@@ -171,7 +171,7 @@ class EmbeddingsComparisonEvaluation(AbstractMultisourceEvaluationMetric):
         plt.title("Embeddings Similarity Comparison")
         plt.xlabel("Coordinates Similarity")
         plt.ylabel("Conditioning Similarity")
-        plt.legend(title="Model ID")
+        plt.legend(title="Model")
         plt.tight_layout()
         plot_file = self.metric_results_dir / "embeddings_similarity_plot.png"
         plt.savefig(plot_file)
@@ -206,9 +206,7 @@ class EmbeddingsComparisonEvaluation(AbstractMultisourceEvaluationMetric):
             )
             return
         print(f"Loading quantitative results from: {quantitative_results_file}")
-        quantitative_results = pd.read_json(
-            quantitative_results_file, orient="records", lines=True
-        )
+        quantitative_results = pd.read_json(quantitative_results_file, orient="records", lines=True)
 
         # Compute the smallest and mean embeddings similarities for each sample and target source
         aggregated_similarities = (

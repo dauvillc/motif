@@ -62,6 +62,7 @@ class EvalJob(submitit.helpers.Checkpointable):
     def __call__(self):
         cfg = self.cfg
         num_workers = cfg["num_workers"]
+        split = cfg["split"]
 
         # Get the model dictionary from the config
         if "models" not in cfg:
@@ -105,7 +106,7 @@ class EvalJob(submitit.helpers.Checkpointable):
 
             print(f"Processing model: {model_id} (run_id: {run_id}, prediction: {pred_name})")
 
-            root_dir = Path(cfg["paths"]["predictions"]) / run_id / pred_name
+            root_dir = Path(cfg["paths"]["predictions"]) / run_id / pred_name / split
             if not root_dir.exists():
                 raise ValueError(
                     f"Predictions for run_id {run_id} with pred_name {pred_name} do not exist.\

@@ -10,6 +10,12 @@ import seaborn as sns
 from tqdm import tqdm
 
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
+from motif.eval.plot_style import (
+    TWO_COL_WIDTH,
+    TWO_PANEL_HEIGHT,
+    apply_paper_style,
+    get_model_palette,
+)
 
 
 class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
@@ -106,24 +112,36 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
         )
 
     def _plot_results(self, results: pd.DataFrame) -> None:
-        """Generates and saves plots comparing the models' PSDs and PSD gains.
+        """Generates and saves a single figure comparing the models' PSDs and PSD gains.
 
-        For each channel, produces a figure with two subplots:
-          - Left: average radially averaged PSD for each model's predictions and the target.
-          - Right: PSD gain (pred / target) for each model, with a reference line at y=1.
+        Produces a figure with two rows and one column per channel:
+          - Row 0: average radially averaged PSD for each model's predictions and the target.
+          - Row 1: PSD gain (pred / target) for each model, with a reference line at y=1.
 
         Args:
             results (pd.DataFrame): DataFrame containing the evaluation results.
         """
-        sns.set_theme(style="whitegrid")
+        apply_paper_style()
+        n_models = results["model_id"].nunique()
+        palette = get_model_palette(n_models)
         channels = results["channel"].unique()
-        for channel in channels:
+        n_channels = len(channels)
+
+        col_width = TWO_COL_WIDTH / 2
+        fig, axes = plt.subplots(
+            2,
+            n_channels,
+            figsize=(col_width * n_channels, TWO_PANEL_HEIGHT * 2),
+            squeeze=False,
+        )
+        fig.suptitle("Radially Averaged Power Spectral Density Comparison")
+
+        for col, channel in enumerate(channels):
             channel_results = results[results["channel"] == channel]
+            ax_psd = axes[0, col]
+            ax_gain = axes[1, col]
 
-            fig, (ax_psd, ax_gain) = plt.subplots(1, 2, figsize=(16, 6))
-            fig.suptitle(f"Radially Averaged PSD - Channel: {channel}")
-
-            # Left: predicted PSD per model
+            # Row 0: predicted PSD per model
             sns.lineplot(
                 data=channel_results,
                 x="freq",
@@ -131,6 +149,7 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
                 hue="model_id",
                 estimator="mean",
                 errorbar=("ci", 95),
+                palette=palette,
                 ax=ax_psd,
             )
             # Target PSD is model-agnostic; use the first model's rows to avoid duplication
@@ -146,39 +165,42 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
                 label="target",
                 ax=ax_psd,
             )
-            ax_psd.set_title("Power Spectral Density")
+            ax_psd.set_title(f"PSD - Channel: {channel}")
             ax_psd.set_xlabel("Frequency")
             ax_psd.set_ylabel("PSD")
             ax_psd.set_xscale("log")
             ax_psd.set_yscale("log")
             ax_psd.set_ylim(bottom=1e-2)
-            ax_psd.grid(True, which="both", ls="--", lw=0.5)
-            ax_psd.legend(title="Model")
+            ax_psd.grid(True, which="both", ls=":", lw=0.4, color="0.8")
+            ax_psd.legend()
 
-            # Right: PSD gain per model + reference line at 1
+            # Row 1: PSD gain per model + reference line at 1
             sns.lineplot(
                 data=channel_results,
                 x="freq",
                 y="psd_gain",
                 hue="model_id",
                 estimator="mean",
+                palette=palette,
                 ax=ax_gain,
             )
             ax_gain.axhline(y=1.0, color="black", linestyle=":", linewidth=1.5)
-            ax_gain.set_title("PSD Gain")
+            ax_gain.set_title(f"PSD Gain - Channel: {channel}")
             ax_gain.set_xlabel("Frequency")
             ax_gain.set_ylabel("PSD Gain")
             ax_gain.set_xscale("log")
             ax_gain.set_yscale("log")
             ax_gain.set_ylim(bottom=1e-2, top=5)
-            ax_gain.grid(True, which="both", ls="--", lw=0.5)
-            ax_gain.legend(title="Model")
+            ax_gain.grid(True, which="both", ls=":", lw=0.4, color="0.8")
+            ax_gain.legend()
 
-            plt.tight_layout()
-            plot_file = self.metric_results_dir / f"psd_{channel}.png"
-            plt.savefig(plot_file)
-            plt.close()
-            print(f"Plot saved to: {plot_file}")
+        sns.despine(fig=fig)
+        plt.tight_layout()
+        plot_file = self.metric_results_dir / "psd_all_channels.png"
+        plt.savefig(plot_file, dpi=300)
+        plt.savefig(plot_file.with_suffix(".pdf"))
+        plt.close()
+        print(f"Plot saved to: {plot_file}")
 
     @staticmethod
     def _compute_psd(

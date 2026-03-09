@@ -14,6 +14,7 @@ from tqdm import tqdm
 from motif.data.grid_functions import crop_nan_border_numpy
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
+from motif.eval.plot_style import PANEL_HEIGHT, TWO_COL_WIDTH, apply_paper_style
 
 
 def flatten_and_ignore_nans(pred: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -266,81 +267,61 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             agg_results (pd.DataFrame): DataFrame containing the aggregated evaluation results.
         """
         # Configure plotting style for publication quality
-        sns.set_theme(style="whitegrid", context="poster")  # Use poster context for larger fonts
-        plt.rcParams.update(
-            {
-                "font.size": 14,
-                "axes.labelsize": 16,
-                "axes.titlesize": 18,
-                "xtick.labelsize": 14,
-                "ytick.labelsize": 14,
-                "legend.fontsize": 14,
-                "figure.dpi": 300,  # High resolution
-                "savefig.dpi": 300,
-                "savefig.bbox": "tight",
-                "font.family": "sans-serif",
-                "font.sans-serif": ["Arial", "DejaVu Sans"],
-            }
-        )
-
-        # Define a consistent color palette for all models
-        n_models = len(results["model_id"].unique())
-        palette = sns.color_palette("colorblind", n_models)
+        apply_paper_style()
 
         # First, we'll show plots of the metrics for each model, over all sources and channels.
         # This gives a general overview of the models' performance.
         # MAE: we'll make a boxplot to show the distribution of MAE values for each model.
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
         sns.boxplot(
             x="model_id",
-            hue="model_id",
             y="mae",
             data=results,
             showfliers=False,
-            palette=palette,
-            legend=False,
+            color="black",
+            fill=False,
         )
         plt.title("MAE distributions across models")
-        plt.xlabel("Model ID")
+        plt.xlabel("Model")
         plt.ylabel("Mean Absolute Error (MAE)")
-        plt.xticks(rotation=25)
+        plt.xticks(rotation=30, ha="right")
+        sns.despine()
         plt.tight_layout()
         overall_mae_plot_file = self.overall_metrics_dir / "mae_boxplot_all_models.svg"
         plt.savefig(overall_mae_plot_file)
+        plt.savefig(overall_mae_plot_file.with_suffix(".pdf"))
         plt.close()
         print(f"Overall MAE plot saved to: {overall_mae_plot_file}")
 
         # We'll also make a barplot showing the mean MAE with 95% CI error bars.
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
         sns.barplot(
             x="model_id",
-            hue="model_id",
             y="mae",
             data=results,
             errorbar=("ci", 95),
-            palette=palette,
-            legend=False,
+            color="steelblue",
         )
         plt.title("MAE comparison across models")
-        plt.xlabel("Model ID")
+        plt.xlabel("Model")
         plt.ylabel("Mean Absolute Error (MAE)")
-        plt.xticks(rotation=25)
+        plt.xticks(rotation=30, ha="right")
+        sns.despine()
         plt.tight_layout()
         overall_mae_barplot_file = self.overall_metrics_dir / "mae_barplot_all_models.svg"
         plt.savefig(overall_mae_barplot_file)
+        plt.savefig(overall_mae_barplot_file.with_suffix(".pdf"))
         plt.close()
         print(f"Overall MAE bar plot saved to: {overall_mae_barplot_file}")
 
         # RMSE: we'll make a barplot, since the RMSE is a single value per model.
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
         sns.barplot(
             x="model_id",
-            hue="model_id",
             y="rmse_mean",
             data=agg_results,
             errorbar=None,
-            palette=palette,
-            legend=False,
+            color="steelblue",
             ax=ax,
         )
         # Draw error bars manually for RMSE
@@ -356,98 +337,104 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             capsize=5,
         )
         plt.title("RMSE comparison across models")
-        plt.xlabel("Model ID")
+        plt.xlabel("Model")
         plt.ylabel("Root Mean Squared Error (RMSE)")
-        plt.xticks(rotation=25)
+        plt.xticks(rotation=30, ha="right")
+        sns.despine()
         plt.tight_layout()
         overall_rmse_barplot_file = self.overall_metrics_dir / "rmse_barplot_all_models.svg"
         plt.savefig(overall_rmse_barplot_file)
+        plt.savefig(overall_rmse_barplot_file.with_suffix(".pdf"))
         plt.close()
         print(f"Overall RMSE bar plot saved to: {overall_rmse_barplot_file}")
 
         # CRPS: boxplot
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
         sns.boxplot(
             x="model_id",
-            hue="model_id",
             y="crps",
             data=results,
             showfliers=False,
-            palette=palette,
-            legend=False,
+            color="black",
+            fill=False,
         )
         plt.title("CRPS distributions across models")
-        plt.xlabel("Model ID")
-        plt.ylabel("Continuous Ranked Probability Score (CRPS)", fontsize=12)
-        plt.xticks(rotation=25)
+        plt.xlabel("Model")
+        plt.ylabel("CRPS")
+        plt.xticks(rotation=30, ha="right")
+        sns.despine()
         plt.tight_layout()
         overall_crps_plot_file = self.overall_metrics_dir / "crps_all_models.svg"
         plt.savefig(overall_crps_plot_file)
+        plt.savefig(overall_crps_plot_file.with_suffix(".pdf"))
         plt.close()
         print(f"Overall CRPS plot saved to: {overall_crps_plot_file}")
 
         # CRPS: barplot
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
         sns.barplot(
             x="model_id",
-            hue="model_id",
             y="crps",
             data=results,
             errorbar=("ci", 95),
-            palette=palette,
-            legend=False,
+            color="steelblue",
         )
         plt.title("Mean CRPS comparison across models")
-        plt.xlabel("Model ID")
-        plt.ylabel("Continuous Ranked Probability Score (CRPS)", fontsize=12)
-        plt.xticks(rotation=25)
+        plt.xlabel("Model")
+        plt.ylabel("Continuous Ranked Probability Score (CRPS)")
+        plt.xticks(rotation=30, ha="right")
+        sns.despine()
         plt.tight_layout()
         overall_crps_barplot_file = self.overall_metrics_dir / "crps_barplot_all_models.svg"
         plt.savefig(overall_crps_barplot_file)
+        plt.savefig(overall_crps_barplot_file.with_suffix(".pdf"))
         plt.close()
         print(f"Overall CRPS bar plot saved to: {overall_crps_barplot_file}")
 
         # SSR: Only for models that have multiple realizations
         if "ssr" in results.columns:
             # Boxplot
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
             sns.boxplot(
                 x="model_id",
-                hue="model_id",
                 y="ssr",
                 data=results,
                 showfliers=False,
-                palette=palette,
-                legend=False,
+                color="black",
+                fill=False,
             )
             plt.title("SSR distributions across models")
-            plt.xlabel("Model ID")
+            plt.xlabel("Model")
             plt.ylabel("Skill-Spread Ratio (SSR)")
-            plt.xticks(rotation=25)
+            plt.axhline(y=1, color="black", linestyle="--", linewidth=1)
+            plt.xticks(rotation=30, ha="right")
+            sns.despine()
             plt.tight_layout()
             overall_ssr_plot_file = self.overall_metrics_dir / "ssr_all_models.svg"
             plt.savefig(overall_ssr_plot_file)
+            plt.savefig(overall_ssr_plot_file.with_suffix(".pdf"))
             plt.close()
             print(f"Overall SSR plot saved to: {overall_ssr_plot_file}")
 
             # Barplot
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
             sns.barplot(
                 x="model_id",
-                hue="model_id",
                 y="ssr",
                 data=results,
                 errorbar=("ci", 95),
-                palette=palette,
-                legend=False,
+                color="steelblue",
             )
             plt.title("Mean SSR comparison across models")
-            plt.xlabel("Model ID")
+            plt.xlabel("Model")
             plt.ylabel("Skill-Spread Ratio (SSR)")
-            plt.xticks(rotation=25)
+            plt.axhline(y=1, color="black", linestyle="--", linewidth=1)
+            plt.xticks(rotation=30, ha="right")
+            sns.despine()
             plt.tight_layout()
             overall_ssr_barplot_file = self.overall_metrics_dir / "ssr_barplot_all_models.svg"
             plt.savefig(overall_ssr_barplot_file)
+            plt.savefig(overall_ssr_barplot_file.with_suffix(".pdf"))
             plt.close()
             print(f"Overall SSR bar plot saved to: {overall_ssr_barplot_file}")
 
@@ -456,45 +443,46 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         grouped_results = results.groupby(["source_name", "channel"])
         for (source_name, channel), group in grouped_results:
             # MAE plot
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
             sns.boxplot(
                 x="model_id",
-                hue="model_id",
                 y="mae",
                 data=group,
                 showfliers=False,
-                palette=palette,
-                legend=False,
+                color="black",
+                fill=False,
             )
             plt.title(f"MAE for {source_name} - {channel}")
-            plt.xlabel("Model ID")
+            plt.xlabel("Model")
             plt.ylabel("Mean Absolute Error (MAE)")
-            plt.xticks(rotation=25)
+            plt.xticks(rotation=30, ha="right")
+            sns.despine()
             plt.tight_layout()
             mae_plot_file = self.mae_dir / f"mae_{source_name}_{channel}.svg"
             plt.savefig(mae_plot_file)
+            plt.savefig(mae_plot_file.with_suffix(".pdf"))
             plt.close()
             print(f"MAE plot saved to: {mae_plot_file}")
 
             # RMSE
             rmse_per_model = group.groupby("model_id")["mse"].mean().reset_index()
             rmse_per_model["rmse"] = np.sqrt(rmse_per_model["mse"])
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
             sns.barplot(
                 x="model_id",
-                hue="model_id",
                 y="rmse",
                 data=rmse_per_model,
-                palette=palette,
-                legend=False,
+                color="steelblue",
             )
             plt.title(f"RMSE for {source_name} - {channel}")
-            plt.xlabel("Model ID")
+            plt.xlabel("Model")
             plt.ylabel("Root Mean Squared Error (RMSE)")
-            plt.xticks(rotation=25)
+            plt.xticks(rotation=30, ha="right")
+            sns.despine()
             plt.tight_layout()
             rmse_plot_file = self.rmse_dir / f"rmse_{source_name}_{channel}.svg"
             plt.savefig(rmse_plot_file)
+            plt.savefig(rmse_plot_file.with_suffix(".pdf"))
             plt.close()
             print(f"RMSE plot saved to: {rmse_plot_file}")
 
@@ -518,12 +506,13 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
 
     @staticmethod
     def _compute_crps(pred_data: np.ndarray, target_data: np.ndarray) -> float:
-        """Computes the Continuous Ranked Probability Score (CRPS) between predictions and targets.
+        """Computes the Fair Continuous Ranked Probability Score (CRPS)
+        between predictions and targets.
         For deterministic predictions, this is equivalent to the MAE.
 
         Args:
             pred_data (np.ndarray): Predicted data, of shape (M, ...) where M is the number of
-                realizations, or (...) for deterministic predictions.
+                realizations (possibly 1 for deterministic models).
             target_data (np.ndarray): Target data, of shape (...) matching the shape of each
                 realization in pred_data.
         """
@@ -531,7 +520,12 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         # Compute the first term: the mean absolute error between predictions and target
         term1 = np.abs(pred_data - target_data).mean()
         # Compute the second term: the mean absolute error between all pairs of predictions
-        term2 = np.abs(pred_data[:, None] - pred_data[None, :]).mean()
+        term2 = np.abs(pred_data[:, None] - pred_data[None, :]).mean(axis=-1).sum()
+        ens_size = pred_data.shape[0]
+        if ens_size > 1:
+            term2 = term2 / (ens_size * (ens_size - 1))
+        else:
+            term2 = term2 / (ens_size * ens_size)
         crps = term1 - 0.5 * term2
         return crps.item()
 

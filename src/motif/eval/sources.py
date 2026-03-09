@@ -7,6 +7,12 @@ import pandas as pd
 import seaborn as sns
 
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
+from motif.eval.plot_style import (
+    SINGLE_COL_WIDTH,
+    TALL_PANEL_HEIGHT,
+    TWO_COL_WIDTH,
+    apply_paper_style,
+)
 
 
 class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
@@ -64,22 +70,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
         """
 
         # Configure plotting style for publication quality
-        sns.set_theme(style="whitegrid", context="poster")  # Use poster context for larger fonts
-        plt.rcParams.update(
-            {
-                "font.size": 14,
-                "axes.labelsize": 16,
-                "axes.titlesize": 18,
-                "xtick.labelsize": 14,
-                "ytick.labelsize": 14,
-                "legend.fontsize": 14,
-                "figure.dpi": 300,  # High resolution
-                "savefig.dpi": 300,
-                "savefig.bbox": "tight",
-                "font.family": "sans-serif",
-                "font.sans-serif": ["Arial", "DejaVu Sans"],
-            }
-        )
+        apply_paper_style()
         self._compute_combinations_statistics()
 
     def _compute_combinations_statistics(self):
@@ -115,7 +106,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
             lambda src_list: ", ".join(self._display_src_name(s) for s in src_list)
         )
         # We'll make two horizontal bar plots, one for the counts and one for the fractions.
-        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COL_WIDTH, TALL_PANEL_HEIGHT))
         sns.barplot(
             x="count",
             y=combination_counts.index.astype(str),
@@ -127,8 +118,11 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
         ax.set_ylabel("Source combination")
         # Reduce the font size of the y-axis labels as the combinations can be long
         ax.tick_params(axis="y", labelsize=8)
+        sns.despine(fig=fig)
         plt.tight_layout()
-        fig.savefig(self.metric_results_dir / "source_combinations_counts.png")
+        counts_plot_file = self.metric_results_dir / "source_combinations_counts.png"
+        fig.savefig(counts_plot_file, dpi=300)
+        fig.savefig(counts_plot_file.with_suffix(".pdf"))
         plt.close(fig)
 
         if self.quant_results is not None:
@@ -157,7 +151,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
             quant = quant.set_index("combination").loc[combination_counts.index].reset_index()
             quant = quant.rename(columns={"index": "combination"})
 
-            fig, ax = plt.subplots(1, 2, figsize=(10, 8))
+            fig, ax = plt.subplots(1, 2, figsize=(TWO_COL_WIDTH, TALL_PANEL_HEIGHT * 1.5))
             sns.barplot(
                 x="crps",
                 y="combination",
@@ -187,8 +181,11 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
                 bbox_to_anchor=(0.5, 0.95),
                 ncol=len(quant["model_id"].unique()),
             )
+            sns.despine(fig=fig)
             plt.tight_layout()
-            fig.savefig(self.metric_results_dir / "source_combinations_crps.png")
+            crps_plot_file = self.metric_results_dir / "source_combinations_crps.png"
+            fig.savefig(crps_plot_file, dpi=300)
+            fig.savefig(crps_plot_file.with_suffix(".pdf"))
             plt.close(fig)
 
         return combination_counts

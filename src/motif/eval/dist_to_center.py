@@ -12,24 +12,7 @@ from haversine import Unit, haversine_vector
 from tqdm import tqdm
 
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
-
-# Set publication-quality style settings
-plt.rcParams.update(
-    {
-        "font.family": "serif",
-        "font.size": 9,
-        "axes.labelsize": 10,
-        "axes.titlesize": 11,
-        "xtick.labelsize": 9,
-        "ytick.labelsize": 9,
-        "legend.fontsize": 8,
-        "figure.dpi": 300,
-        "savefig.dpi": 300,
-        "savefig.format": "pdf",  # PDF for vector graphics in publications
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.05,
-    }
-)
+from motif.eval.plot_style import apply_paper_style
 
 
 class DistanceToCenter(AbstractMultisourceEvaluationMetric):
@@ -61,6 +44,7 @@ class DistanceToCenter(AbstractMultisourceEvaluationMetric):
             verbose (bool): Whether to show progress bars.
             num_workers (int): Number of workers for parallel processing.
         """
+        apply_paper_style()
         # Create a figure for comparing all models
         comparison_fig_dir = self.metric_results_dir / "comparisons"
         comparison_fig_dir.mkdir(exist_ok=True)
@@ -395,9 +379,7 @@ class DistanceToCenter(AbstractMultisourceEvaluationMetric):
             # Add a legend with only one entry per source (combining true and pred)
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = dict(zip(labels, handles))
-            plt.legend(
-                by_label.values(), by_label.keys(), frameon=True, framealpha=0.7, fontsize=8
-            )
+            plt.legend(by_label.values(), by_label.keys(), frameon=True, framealpha=0.7, fontsize=8)
 
             # Save the position plot
             plt.tight_layout()

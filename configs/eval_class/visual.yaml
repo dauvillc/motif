@@ -1,7 +1,8 @@
-visual:
-  _target_: motif.eval.visualization.VisualEvaluationComparison
+inline_visual:
+  _target_: motif.eval.inline_visualization.InlineVisualEval
   eval_fraction: 1.0
-  max_realizations_to_display: 6
+  max_realizations_to_display: 3
+  cmap: viridis
   source_name_replacements: [
     ["tc_primed_pmw_", ""],
     ["_", " "]

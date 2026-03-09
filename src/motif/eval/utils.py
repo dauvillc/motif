@@ -5,12 +5,15 @@ from pandas import Timedelta
 
 
 def format_tdelta(tdelta: Timedelta) -> str:
-    """Formats a timedelta object in the form of floating hours
-    (e.g. 1.5 for 1 hour and 30 minutes, -2.25 for minus 2 hours and 15 minutes).
-    """
-    total_seconds = tdelta.total_seconds()
-    hours = total_seconds / 3600
-    return f"{hours:.2f}h"
+    """Formats a timedelta object to HH:MM format"""
+    total_seconds = int(tdelta.total_seconds())
+    sign = "-" if total_seconds < 0 else ""
+    total_seconds = abs(total_seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if hours == 0:
+        return f"{sign}{minutes} min"
+    return f"{sign}{hours:02d}h {minutes:02d} min"
 
 
 def set_log_ylim_from_artists(ax: Any, margin: float = 0.1) -> None:

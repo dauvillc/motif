@@ -22,12 +22,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
+from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from tqdm import tqdm
 
 from motif.data.grid_functions import crop_nan_border_numpy
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
+from motif.eval.plot_style import GRID_CELL_SIZE, apply_paper_style
 from motif.eval.utils import format_tdelta
 
 
@@ -241,6 +243,8 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         """
         available_sources, target_sources, lats, lons, predictions = cropped_data
 
+        apply_paper_style()
+
         # Retrieve the timedelta of each available source, and sort them in ascending order.
         avail_dts = {
             src: cast(pd.Timedelta, sample_df.loc[(src.name, src.index), "dt"])
@@ -257,7 +261,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         fig, axes = plt.subplots(
             nrows=num_models + 1,
             ncols=n_cols,
-            figsize=(3 * n_cols, 3 * (num_models + 1)),
+            figsize=(GRID_CELL_SIZE * n_cols, GRID_CELL_SIZE * (num_models + 1)),
             squeeze=False,
         )
 
@@ -265,6 +269,8 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         col_cnt = 0
         # Map {(src_name, src_index) --> mpl Normalize}
         norms = {}
+        # Map {(src_name, src_index) --> column index} for colorbar placement
+        target_col_indices: dict = {}
         # First, targets
         for src in target_sources.keys():
             display_name = self._display_src_name(src.name)
@@ -273,6 +279,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             vmin, vmax = np.nanmin(channel_data), np.nanmax(channel_data)
             norm = Normalize(vmin=vmin, vmax=vmax)
             norms[src] = norm
+            target_col_indices[src] = col_cnt
 
             ax = axes[0, col_cnt]
             ax.imshow(channel_data, aspect="auto", cmap=self.cmap, norm=norm)
@@ -323,7 +330,8 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                             norm=norms[src],
                         )
                         ax.set_title(f"{display_name} - {model_id}")
-                        self._set_coords_as_ticks(ax, lats[src], lons[src])
+                        ax.set_xticks([])
+                        ax.set_yticks([])
                         col_cnt += 1
                 else:
                     # Single prediction, plot it directly
@@ -335,26 +343,44 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                         norm=norms[src],
                     )
                     ax.set_title(f"{display_name} - {model_id}")
-                    self._set_coords_as_ticks(ax, lats[src], lons[src])
+                    ax.set_xticks([])
+                    ax.set_yticks([])
                     col_cnt += 1
             # Hide the axes that are not used
             for j in range(col_cnt, n_cols):
                 axes[k + 1, j].axis("off")
 
-        plt.suptitle(channel, fontsize=16)
+        plt.suptitle(channel)
+        # Add one column-spanning colorbar per target-source column
+        for src, col_idx in target_col_indices.items():
+            col_axes = [ax for ax in axes[:, col_idx].tolist() if ax.get_visible()]
+            mappable = ScalarMappable(norm=norms[src], cmap=self.cmap)
+            mappable.set_array([])
+            cbar = fig.colorbar(
+                mappable,
+                ax=col_axes,
+                shrink=0.8,
+                pad=0.03,
+                fraction=0.04,
+                label=channel,
+            )
+            cbar.ax.tick_params(labelsize=7)
         plt.tight_layout()
-        # Save the figure
-        fig_path = self.metric_results_dir / f"sample_{sample_index}_{channel}.svg"
-        fig.savefig(fig_path, format="svg")
+        # Save the figure in both SVG (lossless, editable) and PDF (for LaTeX)
+        fig_stem = self.metric_results_dir / f"sample_{sample_index}_{channel}"
+        fig.savefig(str(fig_stem) + ".svg", format="svg")
+        fig.savefig(str(fig_stem) + ".pdf")
 
         plt.close(fig)
 
     @staticmethod
-    def _set_coords_as_ticks(ax: Any, lats: np.ndarray, lons: np.ndarray, every_nth_pixel=30):
+    def _set_coords_as_ticks(ax: Any, lats: np.ndarray, lons: np.ndarray, n_ticks: int = 5):
         """Sets the latitude and longitude coordinates as ticks on the axes."""
-        ax.set_xticks(range(0, len(lons[0]), every_nth_pixel))
-        ax.set_xticklabels([f"{lon:.2f}" for lon in lons[0, ::every_nth_pixel]], rotation=45)
-        ax.set_yticks(range(0, len(lats[:, 0]), every_nth_pixel))
-        ax.set_yticklabels([f"{lat:.2f}" for lat in lats[::every_nth_pixel, 0]])
+        x_indices = np.linspace(0, len(lons[0]) - 1, n_ticks, dtype=int)
+        y_indices = np.linspace(0, len(lats[:, 0]) - 1, n_ticks, dtype=int)
+        ax.set_xticks(x_indices)
+        ax.set_xticklabels([f"{lons[0, i]:.2f}" for i in x_indices], rotation=45)
+        ax.set_yticks(y_indices)
+        ax.set_yticklabels([f"{lats[i, 0]:.2f}" for i in y_indices])
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")

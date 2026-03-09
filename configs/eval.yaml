@@ -16,6 +16,7 @@ checks_strictness: strict
 
 eval_name: ???
 models: ???
+split: val
 num_workers: 9
 
 

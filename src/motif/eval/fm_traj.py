@@ -156,7 +156,7 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
         axes.set_title("Average Velocity Field MSE over Integration Steps")
         axes.set_xlabel("Integration Step")
         axes.set_ylabel("Velocity Field MSE")
-        axes.legend(title="Model ID")
+        axes.legend()
         plot_file = figs_dir / "avg_vf_mse_over_steps.png"
         plt.savefig(plot_file)
         plt.close(fig)
@@ -181,7 +181,7 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
             )
             axes.set_xlabel("Integration Step")
             axes.set_ylabel("Velocity Field MSE")
-            axes.legend(title="Model ID")
+            axes.legend()
             plot_file = figs_dir / f"avg_vf_mse_over_steps_channel_{channel}.png"
             plt.savefig(plot_file)
             plt.close(fig)
@@ -204,7 +204,7 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
             axes.set_title(f"Average Velocity Field MSE over Integration Steps - Source: {source}")
             axes.set_xlabel("Integration Step")
             axes.set_ylabel("Velocity Field MSE")
-            axes.legend(title="Model ID")
+            axes.legend()
             plot_file = figs_dir / f"avg_vf_mse_over_steps_source_{source}.png"
             plt.savefig(plot_file)
             plt.close(fig)
@@ -218,9 +218,7 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
             return
         elif isinstance(self.visualize_trajectories, bool):
             frac = 1.0
-        elif (
-            isinstance(self.visualize_trajectories, float) and 0 < self.visualize_trajectories < 1
-        ):
+        elif isinstance(self.visualize_trajectories, float) and 0 < self.visualize_trajectories < 1:
             frac = self.visualize_trajectories
         max_samples = int(self.n_samples * frac)
         figs_dir = self.metric_results_dir / "displayed_trajectories"
@@ -348,8 +346,9 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
 
                             # Store normalization
                             if src not in norms:
-                                vmin, vmax = np.nanmin(cropped_available), np.nanmax(
-                                    cropped_available
+                                vmin, vmax = (
+                                    np.nanmin(cropped_available),
+                                    np.nanmax(cropped_available),
                                 )
                                 norms[src] = (vmin, vmax)
 
