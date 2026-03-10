@@ -1,9 +1,9 @@
 """
 Implements visual evaluation comparison for multi-source predictions.
 
-This evaluation class creates visualization figures showing targets and predictions
+This evaluation class creates visualization figures showing true observations and predictions
 for each sample. The figures are organized as follows:
-- Top row: Available sources (avail=1) and target source s(avail=0)
+- Top row: Available sources (avail=1) and target source (avail=0)
 - Subsequent rows: One row per model showing predictions for each source
 
 Usage in Hydra config:
@@ -26,7 +26,6 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from tqdm import tqdm
 
-from motif.data.grid_functions import crop_nan_border_numpy
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 from motif.eval.plot_style import GRID_CELL_SIZE, apply_paper_style
@@ -34,7 +33,7 @@ from motif.eval.utils import format_tdelta
 
 
 class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
-    """Evaluation class that creates visualization figures for targets and predictions."""
+    """Evaluation class that creates visualization figures for true observations and predictions."""
 
     def __init__(
         self,
@@ -91,8 +90,8 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
                 None,
             ]:
                 return (
-                    (df, targets, preds)
-                    for i, (df, targets, preds) in enumerate(self.samples_iterator())
+                    (df, true_obs, preds)
+                    for i, (df, true_obs, preds) in enumerate(self.samples_iterator())
                     if i in selected_indices
                 )
 
@@ -120,24 +119,24 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
     def _process_sample(
         self,
         sample_df: pd.DataFrame,
-        targets: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[SourceIndex, xr.Dataset],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
     ):
         """Process a single sample (helper method for parallel execution).
 
         Args:
             sample_df (pandas.DataFrame): DataFrame with sample metadata
-            targets (dict): Dict mapping source indices to target xarray datasets
+            true_obs (dict): Dict mapping source indices to true observation xarray datasets
             preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
         """
         sample_index = sample_df["sample_index"].iloc[0]
-        # Retrieve the number of channels from the first target source. We'll assume
+        # Retrieve the number of channels from the first true observation source. We'll assume
         # all sources have the same number of channels.
-        channels = cast(list[str], list(next(iter(targets.values())).data_vars))
+        channels = cast(list[str], list(next(iter(true_obs.values())).data_vars))
 
         for channel_idx in range(len(channels)):
             # Crop the padded borders
-            cropped_data = self.crop_padded_borders(targets, preds, sample_df, channel_idx)
+            cropped_data = self.crop_padded_borders(true_obs, preds, sample_df, channel_idx)
 
             # Plot the data
             self.plot_sample(
@@ -149,7 +148,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
 
     def crop_padded_borders(
         self,
-        targets: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[SourceIndex, xr.Dataset],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
         sample_df: pd.DataFrame,
         channel_idx: int,
@@ -160,10 +159,11 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         dict[SourceIndex, np.ndarray],
         dict[str, dict[SourceIndex, np.ndarray]],
     ]:
-        """Crops the padded borders in the sample data.
+        """Extracts numpy arrays from the sample data for plotting.
+        NaN border cropping is performed by the parent class's samples_iterator.
 
         Args:
-            targets (dict): Dict mapping source indices to target xarray datasets
+            true_obs (dict): Dict mapping source indices to true observation xarray datasets
             preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
             sample_df (pandas.DataFrame): DataFrame with sample metadata, indexed
                         by (source_name, source_index).
@@ -176,46 +176,31 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             predictions (dict): Dict model_id -> (src_name, src_index) -> prediction data
         """
 
-        # Because of the batching process in the prediction pipeline, the data generally
-        # includes large padded borders, that we want to crop. In the targets / available sources,
-        # and coordinates, these are padded with NaNs. In the predictions,
-        # they may contain anything.
-        # We will crop them using crop_nan_border_numpy, using the targets as a reference. To do
-        # so, we'll here retrieve the targets / available sources, coordinates and predictions
-        # for all models, and then crop them all at once.
         available_sources = {}  # (src_name, src_index) -> available / source data
-        target_sources = {}  # (src_name, src_index) -> target data
+        target_sources = {}  # (src_name, src_index) -> target data (avail=0)
         lats, lons = {}, {}  # (src_name, src_index) -> coordinates data
         predictions = {model_id: {} for model_id in self.model_data}
-        for src, target_data in targets.items():
+        for src, true_obs_data in true_obs.items():
             # Get the availability flag (-1: missing, 0: target, 1: available)
             avail = sample_df.loc[(src.name, src.index), "avail"]
             if avail == -1:
                 continue
             # Get the coordinates data: latitude and longitude (will be used for the ticklabels)
-            src_lat = target_data["lat"].values
-            src_lon = target_data["lon"].values
-            # We'll use the target as reference for cropping
-            channel = list(target_data.data_vars)[channel_idx]
-            target_arr = target_data[channel].values
-            # Gather all models' predictions for that source if there are any.
-            preds_list = []
-            for model_id in self.model_data:
-                if src in preds[model_id]:
-                    preds_list.append(preds[model_id][src][channel].values)
-            # Crop all borders all at once using the target as reference
-            out = crop_nan_border_numpy(target_arr, [target_arr, src_lat, src_lon] + preds_list)
-            lats[src] = out[1]
-            lons[src] = out[2]
+            src_lat = true_obs_data["lat"].values
+            src_lon = true_obs_data["lon"].values
+            channel = list(true_obs_data.data_vars)[channel_idx]
+            true_obs_arr = true_obs_data[channel].values
+            lats[src] = src_lat
+            lons[src] = src_lon
             # Store the channel data either as target or available source
             if avail == 0:
-                target_sources[src] = out[0]
+                target_sources[src] = true_obs_arr
             else:
-                available_sources[src] = out[0]
-            # Store the cropped predictions
-            for k, model_id in enumerate(self.model_data):
+                available_sources[src] = true_obs_arr
+            # Store the predictions for all models
+            for model_id in self.model_data:
                 if src in preds[model_id]:
-                    predictions[model_id][src] = out[k + 3]
+                    predictions[model_id][src] = preds[model_id][src][channel].values
 
         return available_sources, target_sources, lats, lons, predictions
 
@@ -232,7 +217,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
         sample_df: pd.DataFrame,
         channel: str,
     ):
-        """Plots the targets and predictions for a single sample.
+        """Plots the true observations and predictions for a single sample.
 
         Args:
             sample_index (int): Index of the sample
@@ -254,7 +239,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             sorted(available_sources.items(), key=lambda item: avail_dts[item[0]])
         )
 
-        # Create a figure with subplots: one row per model + 1 for the targets / available sources,
+        # Create a figure with subplots: one row per model + 1 for the true obs / available sources,
         # and one column per source (up to max_realizations_to_display).
         num_sources, num_models = len(sample_df), len(self.model_data)
         n_cols = max(num_sources, self.max_realizations_to_display)
@@ -265,7 +250,7 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             squeeze=False,
         )
 
-        # ------- FIRST ROW: Targets, then available sources -------
+        # ------- FIRST ROW: Target sources (avail=0), then available sources -------
         col_cnt = 0
         # Map {(src_name, src_index) --> mpl Normalize}
         norms = {}

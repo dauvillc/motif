@@ -7,8 +7,8 @@ organized in clearly separated groups:
   [ Input sources ] | [ Groundtruth observation ] | [ Model A ] | [ Model B ] | ...
 
 - "Input sources": one sub-column per available source (avail=1), sorted by dt.
-- "Groundtruth observation": one sub-column per target source (avail=0).
-- One group per model: at most max_realizations_to_display sub-columns per target.
+- "Groundtruth observation": the single target source (avail=0).
+- One group per model: at most max_realizations_to_display sub-columns for the target.
 
 Lat/lon tick labels are shown only for input sources and the groundtruth; prediction
 sub-plots have their tick labels hidden.  Group headers are rendered in a thin label
@@ -38,7 +38,6 @@ from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from tqdm import tqdm
 
-from motif.data.grid_functions import crop_nan_border_numpy
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 from motif.eval.plot_style import GRID_CELL_SIZE, apply_paper_style
@@ -102,8 +101,8 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 None,
             ]:
                 return (
-                    (df, targets, preds)
-                    for i, (df, targets, preds) in enumerate(self.samples_iterator())
+                    (df, true_obs, preds)
+                    for i, (df, true_obs, preds) in enumerate(self.samples_iterator())
                     if i in selected_indices
                 )
 
@@ -126,23 +125,28 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
     def _process_sample(
         self,
         sample_df: pd.DataFrame,
-        targets: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[SourceIndex, xr.Dataset],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
     ):
         """Crop borders and call plot_sample for each channel in this sample."""
         sample_index = sample_df["sample_index"].iloc[0]
-        channels = cast(list[str], list(next(iter(targets.values())).data_vars))
+        # There is exactly one target source (avail=0) per sample; use it to determine channels.
+        target_src = next(
+            src for src in true_obs if sample_df.loc[(src.name, src.index), "avail"] == 0
+        )
+        channels = cast(list[str], list(true_obs[target_src].data_vars))
 
-        for channel_idx in range(len(channels)):
-            cropped_data = self.crop_padded_borders(targets, preds, sample_df, channel_idx)
-            self.plot_sample(sample_index, cropped_data, sample_df, channels[channel_idx])
+        # Create one figure per channel in the target source.
+        for channel in channels:
+            cropped_data = self._extract_numpy_arrays(true_obs, preds, sample_df, channel)
+            self.plot_sample(sample_index, cropped_data, sample_df, channel)
 
-    def crop_padded_borders(
+    def _extract_numpy_arrays(
         self,
-        targets: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[SourceIndex, xr.Dataset],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
         sample_df: pd.DataFrame,
-        channel_idx: int,
+        channel: str,
     ) -> tuple[
         dict[SourceIndex, np.ndarray],
         dict[SourceIndex, np.ndarray],
@@ -150,7 +154,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         dict[SourceIndex, np.ndarray],
         dict[str, dict[SourceIndex, np.ndarray]],
     ]:
-        """Crop NaN-padded borders from targets, coordinates, and predictions.
+        """Extracts numpy arrays from the sample data for plotting.
 
         Returns:
             available_sources: avail==1 data arrays keyed by SourceIndex.
@@ -167,32 +171,32 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             model_id: {} for model_id in self.model_data
         }
 
-        for src, target_data in targets.items():
+        for src, true_obs_data in true_obs.items():
             avail = sample_df.loc[(src.name, src.index), "avail"]
             if avail == -1:
                 continue
-            src_lat = target_data["lat"].values
-            src_lon = target_data["lon"].values
-            channel = list(target_data.data_vars)[channel_idx]
-            target_arr = target_data[channel].values
+            src_lat = true_obs_data["lat"].values
+            src_lon = true_obs_data["lon"].values
+            # For target sources, we use the indicated channel.
+            # For input sources, if that same channel exists we use it, otherwise
+            # we default to the first channel.
+            channels = list(true_obs_data.data_vars)
+            if channel in channels:
+                true_obs_arr = true_obs_data[channel].values
+            else:
+                true_obs_arr = true_obs_data[channels[0]].values
 
-            preds_list = []
-            for model_id in self.model_data:
-                if src in preds[model_id]:
-                    preds_list.append(preds[model_id][src][channel].values)
-
-            out = crop_nan_border_numpy(target_arr, [target_arr, src_lat, src_lon] + preds_list)
-            lats[src] = out[1]
-            lons[src] = out[2]
+            lats[src] = src_lat
+            lons[src] = src_lon
 
             if avail == 0:
-                target_sources[src] = out[0]
+                target_sources[src] = true_obs_arr
             else:
-                available_sources[src] = out[0]
+                available_sources[src] = true_obs_arr
 
-            for k, model_id in enumerate(self.model_data):
+            for model_id in self.model_data:
                 if src in preds[model_id]:
-                    predictions[model_id][src] = out[k + 3]
+                    predictions[model_id][src] = preds[model_id][src][channel].values
 
         return available_sources, target_sources, lats, lons, predictions
 
@@ -216,8 +220,8 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             +-----------------+--+--------------------+--+------------------+--+-...
             | Input sources   |  | Groundtruth        |  | <model_id>       |  | ...
             +-----------------+  +--------------------+  +------------------+  +
-            | avS0 | avS1 |…  |  | tgt0 | tgt1 | …   |  | r0 | r1 | r2 | … |  |
-            +------+------+---+  +------+------+----  +  +----+----+----+---+  +
+            | avS0 | avS1 |…  |  | tgt                |  | r0 | r1 | r2 | … |  |
+            +------+------+---+  +--------------------+  +----+----+----+---+  +
 
         Args:
             sample_index: Integer index of the sample (used in the output filename).
@@ -238,28 +242,26 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             sorted(available_sources.items(), key=lambda item: avail_dts[item[0]])
         )
 
-        target_srcs = list(target_sources.keys())
+        # There is exactly one target source per sample
+        target_src = next(iter(target_sources))
         model_ids = list(self.model_data.keys())
         n_avail = len(available_sources)
-        n_tgt = len(target_sources)
 
-        # Per-target normalization (shared by predictions of the same target)
-        norms: dict[SourceIndex, Normalize] = {
-            src: Normalize(vmin=np.nanmin(data), vmax=np.nanmax(data))
-            for src, data in target_sources.items()
-        }
+        # Normalization shared by the groundtruth and all model predictions
+        norm = Normalize(
+            vmin=np.nanmin(target_sources[target_src]),
+            vmax=np.nanmax(target_sources[target_src]),
+        )
 
         # Number of realization columns per model: inspect shape of first prediction
         n_real_per_model: dict[str, int] = {}
         for model_id in model_ids:
             n_real = 1
-            if target_srcs:
-                first_tgt = target_srcs[0]
-                if first_tgt in predictions[model_id]:
-                    pred = predictions[model_id][first_tgt]
-                    tgt_ndim = len(target_sources[first_tgt].shape)
-                    if len(pred.shape) == tgt_ndim + 1:
-                        n_real = min(self.max_realizations_to_display, pred.shape[0])
+            if target_src in predictions[model_id]:
+                pred = predictions[model_id][target_src]
+                tgt_ndim = len(target_sources[target_src].shape)
+                if len(pred.shape) == tgt_ndim + 1:
+                    n_real = min(self.max_realizations_to_display, pred.shape[0])
             n_real_per_model[model_id] = n_real
 
         # Build group list (skip Input group when there are no available sources)
@@ -272,22 +274,22 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             group_col_counts.append(n_avail)
 
         group_labels.append("Groundtruth observation")
-        group_col_counts.append(n_tgt)
+        group_col_counts.append(1)
 
         for model_id in model_ids:
             group_labels.append(textwrap.fill(model_id, width=20))
-            group_col_counts.append(n_tgt * n_real_per_model[model_id])
+            group_col_counts.append(n_real_per_model[model_id])
 
         n_groups = len(group_labels)
 
         # ---- Figure sizing ----
         # Each image sub-column occupies GRID_CELL_SIZE inches; inter-group gaps add
-        # ~0.18 * GRID_CELL_SIZE of whitespace each; extra width is reserved for colorbars.
+        # ~0.18 * GRID_CELL_SIZE of whitespace each; extra width is reserved for colorbar.
         SPACER = 0.18  # spacer fraction of GRID_CELL_SIZE between groups
         total_image_cols = sum(group_col_counts)
         effective_cols = total_image_cols + SPACER * (n_groups - 1)
         LABEL_H_RATIO = 0.12  # label row height relative to image row
-        fig_width = GRID_CELL_SIZE * effective_cols + 0.7  # 0.7 in reserved for colorbars
+        fig_width = GRID_CELL_SIZE * effective_cols + 0.7  # 0.7 in reserved for colorbar
         fig_height = GRID_CELL_SIZE * (1.0 + LABEL_H_RATIO) + 0.45  # 0.45 in for suptitle
 
         fig = plt.figure(figsize=(fig_width, fig_height))
@@ -326,11 +328,15 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             )
 
             # --- Image axes (bottom row) via inner GridSpec ---
+            # Input-source subplots each show y tick labels, so they need more
+            # horizontal breathing room than the tightly-packed prediction columns.
+            is_multi_input_group = has_input_group and g == 0 and group_col_counts[g] > 1
+            inner_wspace = 0.42 if is_multi_input_group else 0.05
             inner_gs = GridSpecFromSubplotSpec(
                 nrows=1,
                 ncols=group_col_counts[g],
                 subplot_spec=outer_gs[1, g],
-                wspace=0.05,
+                wspace=inner_wspace,
             )
             for c in range(group_col_counts[g]):
                 image_axes[(g, c)] = fig.add_subplot(inner_gs[0, c])
@@ -347,66 +353,60 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 dt_str = format_tdelta(avail_dts[src])
                 display = self._display_src_name(src.name)
                 ax.set_title(f"{display}\n$\\delta t$ = {dt_str}", fontsize=7)
-                self._set_coords_as_ticks(ax, lats[src], lons[src])
+                # We'll only display the "Latitude"/"Longitude" labels for the first input source.
+                self._set_coords_as_ticks(ax, lats[src], lons[src], write_labels=(c == 0))
 
-        # ---- Plot: Groundtruth observation ----
-        gt_axes_per_src: dict[SourceIndex, plt.Axes] = {}  # type: ignore[type-arg]
-        for c, src in enumerate(target_srcs):
-            ax = image_axes[(gt_group_idx, c)]
-            ax.imshow(target_sources[src], aspect="auto", cmap=self.cmap, norm=norms[src])
-            dt = cast(pd.Timedelta, sample_df.loc[(src.name, src.index), "dt"])
-            dt_str = format_tdelta(dt)
-            display = self._display_src_name(src.name)
-            ax.set_title(f"{display}\n$\\delta t$ = {dt_str}", fontsize=7)
-            self._set_coords_as_ticks(ax, lats[src], lons[src])
-            ax.set_ylabel("")  # lat label is shown on input sources only
-            gt_axes_per_src[src] = ax
+        # ---- Plot: Groundtruth observation (single target source) ----
+        gt_ax = image_axes[(gt_group_idx, 0)]
+        gt_ax.imshow(target_sources[target_src], aspect="auto", cmap=self.cmap, norm=norm)
+        dt = cast(pd.Timedelta, sample_df.loc[(target_src.name, target_src.index), "dt"])
+        gt_ax.set_title(
+            f"{self._display_src_name(target_src.name)}\n$\\delta t$ = {format_tdelta(dt)}",
+            fontsize=7,
+        )
+        self._set_coords_as_ticks(gt_ax, lats[target_src], lons[target_src], write_labels=False)
 
         # ---- Plot: Model predictions ----
         for k, model_id in enumerate(model_ids):
             g = model_group_start + k
             n_real = n_real_per_model[model_id]
 
-            for t, src in enumerate(target_srcs):
-                if src not in predictions[model_id]:
-                    for r in range(n_real):
-                        image_axes[(g, t * n_real + r)].axis("off")
-                    continue
-
-                pred_data = predictions[model_id][src]
-                tgt_ndim = len(target_sources[src].shape)
-                is_multi_real = len(pred_data.shape) == tgt_ndim + 1
-                display = self._display_src_name(src.name)
-
+            if target_src not in predictions[model_id]:
                 for r in range(n_real):
-                    ax = image_axes[(g, t * n_real + r)]
-                    realization = pred_data[r, ...] if is_multi_real else pred_data
-                    ax.imshow(realization, aspect="auto", cmap=self.cmap, norm=norms[src])
-                    title = display if n_real == 1 else f"{display} ({r + 1})"
-                    ax.set_title(title, fontsize=7)
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    if not is_multi_real:
-                        break  # deterministic: one column used, loop ends
+                    image_axes[(g, r)].axis("off")
+                continue
 
-        # ---- Colorbars (one per target source, manually placed at the right edge) ----
-        # The rect parameter reserves right margin for colorbars and top margin for suptitle.
+            pred_data = predictions[model_id][target_src]
+            tgt_ndim = len(target_sources[target_src].shape)
+            is_multi_real = len(pred_data.shape) == tgt_ndim + 1
+            display = self._display_src_name(target_src.name)
+
+            for r in range(n_real):
+                ax = image_axes[(g, r)]
+                realization = pred_data[r, ...] if is_multi_real else pred_data
+                ax.imshow(realization, aspect="auto", cmap=self.cmap, norm=norm)
+                title = display if n_real == 1 else f"{display} ({r + 1})"
+                ax.set_title(title, fontsize=7)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                if not is_multi_real:
+                    break  # deterministic: one column used, loop ends
+
+        # ---- Colorbar (one, for the single target source) ----
+        # The rect parameter reserves right margin for the colorbar and top margin for suptitle.
         cbar_w = 0.018
-        cbar_gap = 0.005
         cbar_pad = 0.004
-        right_margin = cbar_pad + n_tgt * cbar_w + max(0, n_tgt - 1) * cbar_gap
+        right_margin = cbar_pad + cbar_w
 
         fig.tight_layout(rect=(0, 0, 1.0 - right_margin, 0.93))
 
-        for i, src in enumerate(target_srcs):
-            # Get the image-row position of the corresponding groundtruth axis
-            pos = gt_axes_per_src[src].get_position()
-            cbar_left = 1.0 - right_margin + cbar_pad + i * (cbar_w + cbar_gap)
-            cax = fig.add_axes((cbar_left, pos.y0, cbar_w, pos.height))
-            mappable = ScalarMappable(norm=norms[src], cmap=self.cmap)
-            mappable.set_array([])
-            cbar = fig.colorbar(mappable, cax=cax, label="Temperature (K)")
-            cbar.ax.tick_params(labelsize=7)
+        pos = gt_ax.get_position()
+        cbar_left = 1.0 - right_margin + cbar_pad
+        cax = fig.add_axes((cbar_left, pos.y0, cbar_w, pos.height))
+        mappable = ScalarMappable(norm=norm, cmap=self.cmap)
+        mappable.set_array([])
+        cbar = fig.colorbar(mappable, cax=cax, label="Temperature (K)")
+        cbar.ax.tick_params(labelsize=7)
 
         # ---- Title and save ----
         fig.suptitle(f"Predictions for channel {channel}", fontsize=9)
@@ -416,7 +416,9 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         plt.close(fig)
 
     @staticmethod
-    def _set_coords_as_ticks(ax: Any, lats: np.ndarray, lons: np.ndarray, n_ticks: int = 5):
+    def _set_coords_as_ticks(
+        ax: Any, lats: np.ndarray, lons: np.ndarray, n_ticks: int = 5, write_labels: bool = True
+    ):
         """Set lat/lon coordinates as axis tick labels."""
         x_indices = np.linspace(0, len(lons[0]) - 1, n_ticks, dtype=int)
         y_indices = np.linspace(0, len(lats[:, 0]) - 1, n_ticks, dtype=int)
@@ -424,5 +426,6 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         ax.set_xticklabels([f"{lons[0, i]:.2f}" for i in x_indices], rotation=45)
         ax.set_yticks(y_indices)
         ax.set_yticklabels([f"{lats[i, 0]:.2f}" for i in y_indices])
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
+        if write_labels:
+            ax.set_xlabel("Longitude")
+            ax.set_ylabel("Latitude")

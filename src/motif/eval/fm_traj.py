@@ -70,14 +70,14 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
             total=self.n_samples,
         ):
             sample_index = sample_df["sample_index"].iloc[0]
-            for src, target_data in sample_data["targets"].items():
+            for src, true_obs_data in sample_data["true_obs"].items():
                 source_name, source_index = src
                 # We only evaluate sources that were masked, i.e. for which the availability flag
                 # is 0 (1 meaning available but not masked, -1 meaning not available).
                 if sample_df.loc[src, "avail"] != 0:
                     continue
                 # Retrieve the list of channels for the source
-                channels = list(target_data.data_vars.keys())
+                channels = list(true_obs_data.data_vars.keys())
                 # Evaluate each model's predictions against the target data
                 # on every channel.
                 for model_id in self.model_data:
@@ -227,8 +227,6 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
 
         import plotly.graph_objects as go
 
-        from motif.data.grid_functions import crop_nan_border_numpy
-
         for k, (sample_df, sample_data) in tqdm(
             enumerate(self.samples_iterator(include_intermediate_steps=True)),
             desc="Creating trajectory animations",
@@ -237,7 +235,7 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
             sample_index = sample_df["sample_index"].iloc[0]
             # Retrieve the number of channels from any source. We'll assume
             # all sources have the same number of channels.
-            channels = list(next(iter(sample_data["targets"].values())).data_vars)
+            channels = list(next(iter(sample_data["true_obs"].values())).data_vars)
 
             # We'll now create a plotly animation for each channel. Each animation will have
             # one column per source and one row per model. Each figure will use frames to show
@@ -296,19 +294,15 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
                     for src in target_sources:
                         if src in sample_data["predictions"][model_id]:
                             # Get target data for reference
-                            target_data = sample_data["targets"][src][channel].values
+                            target_data = sample_data["true_obs"][src][channel].values
                             pred_data = sample_data["predictions"][model_id][src][channel].values
 
                             # Use first realization only
                             if len(pred_data.shape) > len(target_data.shape):
                                 pred_data = pred_data[0]  # Shape: (T, H, W)
 
-                            # Crop borders using target as reference
-                            cropped_arrays = crop_nan_border_numpy(
-                                target_data, [target_data, pred_data]
-                            )
-                            cropped_target = cropped_arrays[0]
-                            cropped_pred = cropped_arrays[1]
+                            cropped_target = target_data
+                            cropped_pred = pred_data
 
                             # Store normalization based on target data
                             if src not in norms:
@@ -336,13 +330,10 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
 
                     # Process available sources (these should be static)
                     for src in available_sources:
-                        if src in sample_data["targets"]:
-                            available_data = sample_data["targets"][src][channel].values
+                        if src in sample_data["true_obs"]:
+                            available_data = sample_data["true_obs"][src][channel].values
 
-                            # Crop borders
-                            cropped_available = crop_nan_border_numpy(
-                                available_data, [available_data]
-                            )[0]
+                            cropped_available = available_data
 
                             # Store normalization
                             if src not in norms:
@@ -395,11 +386,9 @@ class FlowMatchingTrajectoryEvaluation(AbstractMultisourceEvaluationMetric):
 
                         # Available sources (static, same data for all frames)
                         for src in available_sources:
-                            if src in sample_data["targets"]:
-                                available_data = sample_data["targets"][src][channel].values
-                                cropped_available = crop_nan_border_numpy(
-                                    available_data, [available_data]
-                                )[0]
+                            if src in sample_data["true_obs"]:
+                                available_data = sample_data["true_obs"][src][channel].values
+                                cropped_available = available_data
 
                                 frame_data.append(
                                     go.Heatmap(

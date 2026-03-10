@@ -11,7 +11,6 @@ import seaborn as sns
 import xarray as xr
 from tqdm import tqdm
 
-from motif.data.grid_functions import crop_nan_border_numpy
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 from motif.eval.plot_style import PANEL_HEIGHT, TWO_COL_WIDTH, apply_paper_style
@@ -126,14 +125,14 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
     def _process_sample(
         self,
         sample_df: pd.DataFrame,
-        targets: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[SourceIndex, xr.Dataset],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
     ) -> list[dict]:
         """Process a single sample and return the results (helper method for parallel execution).
 
         Args:
             sample_df (pandas.DataFrame): DataFrame with sample metadata
-            targets (dict): Dict mapping source indices to target xarray datasets
+            true_obs (dict): Dict mapping source indices to true observation xarray datasets
             preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
 
         Returns:
@@ -141,7 +140,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         """
         results = []
         sample_index = sample_df["sample_index"].iloc[0]
-        for src, target_data in targets.items():
+        for src, true_obs_data in true_obs.items():
             source_name, source_index = src.name, src.index
             src_tuple = (source_name, source_index)
             # We only evaluate sources that were masked, i.e. for which the availability flag
@@ -149,19 +148,14 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             if sample_df.loc[src_tuple, "avail"] != 0:
                 continue
             # Retrieve the list of channels for the source
-            channels = list(target_data.data_vars.keys())
+            channels = list(true_obs_data.data_vars.keys())
             # Evaluate each model's predictions against the target data
             # on every channel.
             for model_id in self.model_data:
                 pred_data = preds[model_id][src]
                 for channel in channels:
                     pred_data_channel = pred_data[channel].values
-                    target_data_channel = target_data[channel].values
-                    # Crop all borders all at once using the target as reference
-                    out = crop_nan_border_numpy(
-                        target_data_channel, [target_data_channel, pred_data_channel]
-                    )
-                    target_data_channel, pred_data_channel = out[0], out[1]
+                    target_data_channel = true_obs_data[channel].values
                     # If there isn't a realization dimension, add one for consistency
                     if pred_data_channel.ndim == target_data_channel.ndim:
                         pred_data_channel = np.expand_dims(pred_data_channel, axis=0)

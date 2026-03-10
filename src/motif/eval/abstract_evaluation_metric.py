@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Generator, cast
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -163,18 +164,18 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                 - avail: Availability flag (1 for available, 0 for target)
                 - dt: Timestamp of the sample
                 only the data for a single sample (sample_index) is yielded at a time.
-            targets (dict): Dict (source_name, source_index) -> xarray.Dataset
-                The targets are the same for all models.
+            true_obs (dict): Dict (source_name, source_index) -> xarray.Dataset
+                The true observations are the same for all models.
             predictions (dict): Dict model_id -> Dict (source_name, source_index) -> xarray.Dataset
         The missing (source_name, source_index) pairs, i.e. those with an availability flag
         of -1, are removed from both the DataFrame and xarray datasets.
         """
         for sample_index in self.samples_df["sample_index"].unique():
-            targets, predictions = self.load_data(sample_index)
+            true_obs, predictions = self.load_data(sample_index)
             sample_df = self.samples_df[self.samples_df["sample_index"] == sample_index]
             sample_df = sample_df.set_index(["source_name", "source_index"])
 
-            targets_dict = {}
+            true_obs_dict = {}
             preds_dict = {model_id: {} for model_id in self.model_data}
             for src_tuple in sample_df.index:
                 src = SourceIndex(name=src_tuple[0], index=src_tuple[1])
@@ -182,7 +183,7 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                 avail = sample_df.loc[src_tuple, "avail"]
                 if avail == -1:
                     continue
-                targets_dict[src] = targets[src]
+                true_obs_dict[src] = true_obs[src]
                 for model_id in self.model_data:
                     if src not in predictions[model_id]:
                         # A source might included in the inputs/outputs of one the models
@@ -194,9 +195,41 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                         model_preds = model_preds.isel(integration_step=-1)
                     preds_dict[model_id][src] = model_preds
 
+            # Crop NaN borders for each source, using the true observation as reference.
+            # This removes padded NaN borders that may have been introduced during batching.
+            for src in list(true_obs_dict.keys()):
+                true_obs_ds = true_obs_dict[src]
+                first_channel = list(true_obs_ds.data_vars)[0]
+                ref_array = true_obs_ds[first_channel].values
+                # Compute crop bounds from the true observation
+                row_full_nan = np.all(np.isnan(ref_array), axis=1)
+                col_full_nan = np.all(np.isnan(ref_array), axis=0)
+                non_nan_rows = np.where(~row_full_nan)[0]
+                non_nan_cols = np.where(~col_full_nan)[0]
+                if len(non_nan_rows) == 0 or len(non_nan_cols) == 0:
+                    continue
+                row_slice = slice(int(non_nan_rows[0]), int(non_nan_rows[-1]) + 1)
+                col_slice = slice(int(non_nan_cols[0]), int(non_nan_cols[-1]) + 1)
+                # Crop true_obs using its spatial dimension names (last two dims)
+                spatial_dims = true_obs_ds[first_channel].dims
+                true_obs_dict[src] = true_obs_ds.isel({
+                    spatial_dims[-2]: row_slice,
+                    spatial_dims[-1]: col_slice,
+                })
+                # Crop predictions for all models using the same bounds
+                for model_id in self.model_data:
+                    if src in preds_dict[model_id]:
+                        pred_ds = preds_dict[model_id][src]
+                        pred_first_ch = list(pred_ds.data_vars)[0]
+                        pred_spatial_dims = pred_ds[pred_first_ch].dims
+                        preds_dict[model_id][src] = pred_ds.isel({
+                            pred_spatial_dims[-2]: row_slice,
+                            pred_spatial_dims[-1]: col_slice,
+                        })
+
             # Remove the rows from the DataFrame that are not available
             sample_df = sample_df[sample_df["avail"] != -1]
-            yield sample_df, targets_dict, preds_dict
+            yield sample_df, true_obs_dict, preds_dict
 
     def load_data(
         self, sample_index: int
@@ -206,11 +239,11 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
         Args:
             sample_index (int): Index of the sample to load.
         Returns:
-            targets (dict): Dict (src_name, src_index) -> xarray.Dataset
-               The targets are the same for all models.
+            true_obs (dict): Dict (src_name, src_index) -> xarray.Dataset
+               The true observations are the same for all models.
             predictions (dict): Dict model_id -> (src_name, src_index) -> xarray.Dataset
         """
-        targets, predictions = {}, {}
+        true_obs, predictions = {}, {}
         for i, (model_id, model_spec) in enumerate(self.model_data.items()):
             predictions[model_id] = {}
             info_df = model_spec["info_df"]
@@ -223,14 +256,14 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                 src_name, index = row["source_name"], row["source_index"]
                 src = SourceIndex(name=src_name, index=index)
 
-                # Load targets for the first model only (since they are the same for all)
+                # Load true observations for the first model only (since they are the same for all)
                 if i == 0:
                     target_path = (
                         root_dir / "targets" / src_name / str(index) / f"{sample_index}.nc"
                     )
-                    targets_ds = xr.open_dataset(target_path)
-                    targets[src] = apply_channel_name_replacements(
-                        targets_ds, self.channel_replacements
+                    true_obs_ds = xr.open_dataset(target_path)
+                    true_obs[src] = apply_channel_name_replacements(
+                        true_obs_ds, self.channel_replacements
                     )
 
                 # Load the predictions. These only exist for masked
@@ -244,7 +277,7 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                         predictions_ds, self.channel_replacements
                     )
 
-        return targets, predictions
+        return true_obs, predictions
 
     @abc.abstractmethod
     def evaluate(self, **kwargs):

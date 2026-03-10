@@ -59,11 +59,11 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
                 'channel', 'mae', 'mse', 'crps', 'ssr'.
         """
         results = []  # List of dictionaries that we'll concatenate later into a DataFrame
-        for sample_df, targets, preds in tqdm(
+        for sample_df, true_obs, preds in tqdm(
             self.samples_iterator(), desc="Evaluating samples", total=self.n_samples
         ):
             sample_index = sample_df["sample_index"].iloc[0]
-            for src, target_data in targets.items():
+            for src, true_obs_data in true_obs.items():
                 source_name, source_index = src.name, src.index
                 src_tuple = (source_name, source_index)
                 # We only evaluate sources that were masked, i.e. for which the availability flag
@@ -71,14 +71,14 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
                 if sample_df.loc[src_tuple, "avail"] != 0:
                     continue
                 # Retrieve the list of channels for the source
-                channels = list(target_data.data_vars.keys())
+                channels = list(true_obs_data.data_vars.keys())
                 # Evaluate each model's predictions against the target data
                 # on every channel.
                 for model_id in self.model_data:
                     pred_data = preds[model_id][src]
                     for channel in channels:
                         pred_data_channel = pred_data[channel].values
-                        target_data_channel = target_data[channel].values
+                        target_data_channel = true_obs_data[channel].values
                         # For now, we'll skip the minority of cases where the target data
                         # contains NaNs.
                         if not np.isnan(target_data_channel).any():
