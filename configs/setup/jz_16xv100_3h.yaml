@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - override /paths: jz
+
+setup:
+  timeout_min: 180
+  cpus_per_task: 10
+  slurm_nodes: 4
+  slurm_ntasks_per_node: ${trainer.devices}
+  slurm_gres: "gpu:4"
+  name: ${wandb.name}
+  slurm_account: "xyw@v100"
+  slurm_signal_delay_s: 120
+  slurm_additional_parameters:
+    hint: nomultithread
+  local_setup:
+    - source ${oc.env:HOME}/.bash_profile
+    - v100
+
+trainer:
+  devices: 4
+  num_nodes: 4
+
+dataloader:
+  num_workers: 9
