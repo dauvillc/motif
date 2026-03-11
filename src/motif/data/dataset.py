@@ -201,14 +201,13 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # If no source has been found, raise an error
         if len(sources_metadata) == 0:
             raise ValueError("Did not find any source metadata files.")
+
         # Filter the included variables for each source
-        self.variables_dict = {
-            source: included_variables_dict[source] for source in sources_metadata
-        }
+        variables_dict = {source: included_variables_dict[source] for source in sources_metadata}
 
         self.sources: List[Source] = []
         self.sources_dict: Dict[str, Source] = {}
-        for source_name, (all_vars, input_only, output_only) in self.variables_dict.items():
+        for source_name, (all_vars, input_only, output_only) in variables_dict.items():
             # Update the source metadata with the included variables
             sources_metadata[source_name]["data_vars"] = all_vars
             sources_metadata[source_name]["input_only_vars"] = input_only
@@ -221,13 +220,11 @@ class MultiSourceDataset(torch.utils.data.Dataset):
 
         # Filter the dataframe to only keep the rows where source_name is the name of a source
         # in self.sources
-        source_names = [source.name for source in self.sources]
-        self.source_variables = {source.name: source.data_vars for source in self.sources}
-        self.source_types = list(set([source.type for source in self.sources]))
-        self.df = self.df[self.df["source_name"].isin(source_names)]
-        self.df = self.df.reset_index(drop=True)
-        if len(self.df) == 0:
-            raise ValueError("No samples found for the given sources.")
+        # source_names = [source.name for source in self.sources]
+        # self.df = self.df[self.df["source_name"].isin(source_names)]
+        # self.df = self.df.reset_index(drop=True)
+        # if len(self.df) == 0:
+        #     raise ValueError("No samples found for the given sources.")
 
         # Time delta settings
         if dt_max is None:
@@ -263,19 +260,33 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         masks = []
         # We'll begin by counting which sources are available for each sample.
         available_sources_count = available_sources.sum(axis=1)
+
         # Group availability criteria: for each group of sources, only keep the samples
         # where at least min_avail sources from the group are available.
-        # Note: the max_avail criterion will be applied later, in __getitem__.
         # First, the user can specify source names, but they can also specify source types.
         # We need to convert the source types to source names.
+
+        # - Retrieve from self.dt a map {source_name: source_type} for every source name appearing
+        # in self.df.
+        # NB: a source name or type can be indicated in the availability criteria even if not in
+        # self.sources, as long as it appears in the samples dataframe.
+        src_types_dict = (
+            self.df[["source_name", "source_type"]]
+            .drop_duplicates()
+            .set_index("source_name")["source_type"]
+            .to_dict()
+        )
+        source_names = set(src_types_dict.keys())
+        source_types = set(src_types_dict.values())
+
         for group_name, group_avail_dict in self.groups_availability.items():
             group_sources = []
             for s in group_avail_dict["sources"]:
                 if s in source_names:
                     group_sources.append(s)
-                elif s in self.source_types:
+                elif s in source_types:
                     # Add all sources of that type
-                    type_sources = [source.name for source in self.sources if source.type == s]
+                    type_sources = [name for name, type_ in src_types_dict.items() if type_ == s]
                     group_sources.extend(type_sources)
                 # If the source/type is not found, print a warning, but it could be that the
                 # source is simply not in the dataset split, so we don't raise an error.
@@ -293,13 +304,24 @@ class MultiSourceDataset(torch.utils.data.Dataset):
         # Combine the masks with a logical AND
         mask = np.logical_and.reduce(masks)
         # We can now build the reference dataframe:
-        self.reference_df = self.df[mask][["sid", "time", "source_name", "intensity"]]
+        self.reference_df: pd.DataFrame = self.df[mask][["sid", "time", "source_name", "intensity"]]
         self.reference_df["n_available_sources"] = available_sources_count[mask]
+
+        # Remove from self.df and self.reference_df the sources that are not within self.sources
+        valid_sources = [source.name for source in self.sources]
+        self.df = self.df[self.df["source_name"].isin(valid_sources)].reset_index(drop=True)
+        self.reference_df = self.reference_df[
+            self.reference_df["source_name"].isin(valid_sources)
+        ].reset_index(drop=True)
+        if self.df.empty:
+            raise ValueError("No samples left after filtering for the given sources.")
+        if self.reference_df.empty:
+            raise ValueError("No reference samples left after filtering for the given sources.")
 
         # Potentially only define the samples based on a subset of reference sources
         if reference_sources is not None:
             ref_source_mask = self.reference_df["source_name"].isin(reference_sources)
-            self.reference_df = self.reference_df[ref_source_mask]
+            self.reference_df = self.reference_df[ref_source_mask].reset_index(drop=True)
 
         # Avoid duplicated samples if two observations are at the exact same time
         self.reference_df = self.reference_df.drop_duplicates(["sid", "time"])
