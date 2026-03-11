@@ -132,10 +132,15 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
         if checks_strictness != "none":
             models_info_sanity_check(info_dfs, strictness=checks_strictness)
 
-        # Isolate a model-agnostic DataFrame with the columns that don't depend on the model:
-        # sample_index, source_name, source_index, avail, dt
+        # Concatenate the dataframes of all models into a final dataframe with the columns:
+        # model_id, sample_index, source_name, source_index, avail, dt
+        for model_id, info_df in zip(model_data.keys(), info_dfs):
+            info_df["model_id"] = [model_id] * len(info_df)
+        self.samples_df = pd.concat(info_dfs, ignore_index=True)
         self.samples_df = (
-            info_dfs[0][["sample_index", "source_name", "source_index", "avail", "dt"]]
+            self.samples_df[
+                ["model_id", "sample_index", "source_name", "source_index", "avail", "dt"]
+            ]
             .drop_duplicates()
             .reset_index(drop=True)
         )
@@ -145,7 +150,9 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
         self, include_intermediate_steps: bool = False
     ) -> Generator[
         tuple[
-            pd.DataFrame, dict[SourceIndex, xr.Dataset], dict[str, dict[SourceIndex, xr.Dataset]]
+            pd.DataFrame,
+            dict[str, dict[SourceIndex, xr.Dataset]],
+            dict[str, dict[SourceIndex, xr.Dataset]],
         ],
         None,
         None,
@@ -158,74 +165,77 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                 "integration_step" corresponding to the time steps of the ODE solver.
         Yields:
             sample_df (pandas.DataFrame): A DataFrame with the columns:
+                - model_id: ID of the model
                 - sample_index: Index of the sample (same for all rows)
                 - source_name: Name of the source
                 - source_index: Index of the source
                 - avail: Availability flag (1 for available, 0 for target)
                 - dt: Timestamp of the sample
                 only the data for a single sample (sample_index) is yielded at a time.
-            true_obs (dict): Dict (source_name, source_index) -> xarray.Dataset
-                The true observations are the same for all models.
+            true_obs (dict): Dict model_id -> Dict (source_name, source_index) -> xarray.Dataset
             predictions (dict): Dict model_id -> Dict (source_name, source_index) -> xarray.Dataset
         The missing (source_name, source_index) pairs, i.e. those with an availability flag
         of -1, are removed from both the DataFrame and xarray datasets.
         """
         for sample_index in self.samples_df["sample_index"].unique():
             true_obs, predictions = self.load_data(sample_index)
-            sample_df = self.samples_df[self.samples_df["sample_index"] == sample_index]
-            sample_df = sample_df.set_index(["source_name", "source_index"])
+            sample_df: pd.DataFrame = self.samples_df[
+                self.samples_df["sample_index"] == sample_index
+            ].set_index(["model_id", "source_name", "source_index"])
 
-            true_obs_dict = {}
+            true_obs_dict = {model_id: {} for model_id in self.model_data}
             preds_dict = {model_id: {} for model_id in self.model_data}
-            for src_tuple in sample_df.index:
-                src = SourceIndex(name=src_tuple[0], index=src_tuple[1])
+            for model_id, src_name, src_index in sample_df.index:
+                src = SourceIndex(name=src_name, index=src_index)
                 # Get the availability flag to know whether this src is available
-                avail = sample_df.loc[src_tuple, "avail"]
+                avail = sample_df.loc[(model_id, src_name, src_index), "avail"]
                 if avail == -1:
                     continue
-                true_obs_dict[src] = true_obs[src]
-                for model_id in self.model_data:
-                    if src not in predictions[model_id]:
-                        # A source might included in the inputs/outputs of one the models
-                        # but not in the others.
-                        continue
-                    # If the predictions include intermediate steps, keep only the last one
-                    model_preds = predictions[model_id][src]
-                    if not include_intermediate_steps and "integration_step" in model_preds.dims:
-                        model_preds = model_preds.isel(integration_step=-1)
-                    preds_dict[model_id][src] = model_preds
+                # Append the true obs to that model's dict.
+                true_obs_dict[model_id][src] = true_obs[model_id][src]
+                # Append the predictions to that model's dict if they exist
+                if src not in predictions[model_id]:
+                    continue
+                model_preds = predictions[model_id][src]
+                # If the predictions include intermediate steps, keep only the last one
+                if not include_intermediate_steps and "integration_step" in model_preds.dims:
+                    model_preds = model_preds.isel(integration_step=-1)
+                preds_dict[model_id][src] = model_preds
 
             # Crop NaN borders for each source, using the true observation as reference.
             # This removes padded NaN borders that may have been introduced during batching.
-            for src in list(true_obs_dict.keys()):
-                true_obs_ds = true_obs_dict[src]
-                first_channel = list(true_obs_ds.data_vars)[0]
-                ref_array = true_obs_ds[first_channel].values
-                # Compute crop bounds from the true observation
-                row_full_nan = np.all(np.isnan(ref_array), axis=1)
-                col_full_nan = np.all(np.isnan(ref_array), axis=0)
-                non_nan_rows = np.where(~row_full_nan)[0]
-                non_nan_cols = np.where(~col_full_nan)[0]
-                if len(non_nan_rows) == 0 or len(non_nan_cols) == 0:
-                    continue
-                row_slice = slice(int(non_nan_rows[0]), int(non_nan_rows[-1]) + 1)
-                col_slice = slice(int(non_nan_cols[0]), int(non_nan_cols[-1]) + 1)
-                # Crop true_obs using its spatial dimension names (last two dims)
-                spatial_dims = true_obs_ds[first_channel].dims
-                true_obs_dict[src] = true_obs_ds.isel({
-                    spatial_dims[-2]: row_slice,
-                    spatial_dims[-1]: col_slice,
-                })
-                # Crop predictions for all models using the same bounds
-                for model_id in self.model_data:
+            for model_id in self.model_data:
+                for src in list(true_obs_dict[model_id].keys()):
+                    true_obs_ds = true_obs_dict[model_id][src]
+                    first_channel = list(true_obs_ds.data_vars)[0]
+                    ref_array = true_obs_ds[first_channel].values
+                    # Compute crop bounds from the true observation
+                    row_full_nan = np.all(np.isnan(ref_array), axis=1)
+                    col_full_nan = np.all(np.isnan(ref_array), axis=0)
+                    non_nan_rows = np.where(~row_full_nan)[0]
+                    non_nan_cols = np.where(~col_full_nan)[0]
+                    if len(non_nan_rows) == 0 or len(non_nan_cols) == 0:
+                        continue
+                    row_slice = slice(int(non_nan_rows[0]), int(non_nan_rows[-1]) + 1)
+                    col_slice = slice(int(non_nan_cols[0]), int(non_nan_cols[-1]) + 1)
+                    # Crop true_obs using its spatial dimension names (last two dims)
+                    spatial_dims = true_obs_ds[first_channel].dims
+                    true_obs_dict[model_id][src] = true_obs_ds.isel(
+                        {
+                            spatial_dims[-2]: row_slice,
+                            spatial_dims[-1]: col_slice,
+                        }
+                    )
                     if src in preds_dict[model_id]:
                         pred_ds = preds_dict[model_id][src]
                         pred_first_ch = list(pred_ds.data_vars)[0]
                         pred_spatial_dims = pred_ds[pred_first_ch].dims
-                        preds_dict[model_id][src] = pred_ds.isel({
-                            pred_spatial_dims[-2]: row_slice,
-                            pred_spatial_dims[-1]: col_slice,
-                        })
+                        preds_dict[model_id][src] = pred_ds.isel(
+                            {
+                                pred_spatial_dims[-2]: row_slice,
+                                pred_spatial_dims[-1]: col_slice,
+                            }
+                        )
 
             # Remove the rows from the DataFrame that are not available
             sample_df = sample_df[sample_df["avail"] != -1]
@@ -233,18 +243,18 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
 
     def load_data(
         self, sample_index: int
-    ) -> tuple[dict[SourceIndex, xr.Dataset], dict[str, dict[SourceIndex, xr.Dataset]]]:
+    ) -> tuple[dict[str, dict[SourceIndex, xr.Dataset]], dict[str, dict[SourceIndex, xr.Dataset]]]:
         """Loads the data for all models as xarray datasets stored in individual
         netCDF4 files.
         Args:
             sample_index (int): Index of the sample to load.
         Returns:
-            true_obs (dict): Dict (src_name, src_index) -> xarray.Dataset
-               The true observations are the same for all models.
+            true_obs (dict): Dict model_id -> (src_name, src_index) -> xarray.Dataset
             predictions (dict): Dict model_id -> (src_name, src_index) -> xarray.Dataset
         """
         true_obs, predictions = {}, {}
         for i, (model_id, model_spec) in enumerate(self.model_data.items()):
+            true_obs[model_id] = {}
             predictions[model_id] = {}
             info_df = model_spec["info_df"]
             info_df = info_df[info_df["sample_index"] == sample_index]
@@ -256,15 +266,12 @@ class AbstractMultisourceEvaluationMetric(abc.ABC):
                 src_name, index = row["source_name"], row["source_index"]
                 src = SourceIndex(name=src_name, index=index)
 
-                # Load true observations for the first model only (since they are the same for all)
-                if i == 0:
-                    target_path = (
-                        root_dir / "targets" / src_name / str(index) / f"{sample_index}.nc"
-                    )
-                    true_obs_ds = xr.open_dataset(target_path)
-                    true_obs[src] = apply_channel_name_replacements(
-                        true_obs_ds, self.channel_replacements
-                    )
+                # Load the true observation.
+                target_path = root_dir / "targets" / src_name / str(index) / f"{sample_index}.nc"
+                true_obs_ds = xr.open_dataset(target_path)
+                true_obs[model_id][src] = apply_channel_name_replacements(
+                    true_obs_ds, self.channel_replacements
+                )
 
                 # Load the predictions. These only exist for masked
                 # sources, i.e. when the availability flag is 0.

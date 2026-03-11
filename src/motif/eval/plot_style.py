@@ -44,9 +44,9 @@ def apply_paper_style(use_latex: bool = False) -> None:
     """Configure matplotlib + seaborn for publication-quality paper figures.
 
     Sets seaborn theme to ``style="ticks"`` with ``context="paper"``, then
-    overrides rcParams for NeurIPS/ICML/ECML conventions:
+    overrides rcParams for A4 single-column document conventions:
 
-    - 9 pt body font, 8 pt tick/legend labels
+    - 11 pt body font, 10 pt tick/legend labels
     - 1 pt line widths, 0.6 pt axis spines
     - No legend frame
     - PDF vector output (300 DPI raster fallback)
@@ -60,24 +60,24 @@ def apply_paper_style(use_latex: bool = False) -> None:
             Modern. Set to False to use DejaVu Sans — bundled with
             matplotlib, works on any machine with no TeX dependency.
     """
-    # "ticks" removes the heavy white-grid background; "paper" context
-    # provides a 1.0 font_scale appropriate for 9-10 pt body text.
-    sns.set_theme(style="ticks", context="paper", font_scale=1.0)
+    # "ticks" removes the heavy white-grid background; font_scale=1.3 gives
+    # 11 pt body text, readable in A4 single-column documents.
+    sns.set_theme(style="ticks", context="paper", font_scale=1.3)
 
     rc: dict = {
         # --- Font (sans-serif fallback, overridden if use_latex=True) ---
         "font.family": "sans-serif",
         "font.sans-serif": ["DejaVu Sans", "Helvetica Neue", "Helvetica", "Arial"],
         # --- Font sizes ---
-        "font.size": 9,
-        "axes.labelsize": 9,
-        "axes.titlesize": 9,
+        "font.size": 11,
+        "axes.labelsize": 11,
+        "axes.titlesize": 11,
         "axes.titlepad": 4.0,
-        "xtick.labelsize": 8,
-        "ytick.labelsize": 8,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
         # --- Legend ---
-        "legend.fontsize": 8,
-        "legend.title_fontsize": 8,
+        "legend.fontsize": 10,
+        "legend.title_fontsize": 10,
         "legend.frameon": False,
         "legend.borderpad": 0.4,
         # --- Lines ---

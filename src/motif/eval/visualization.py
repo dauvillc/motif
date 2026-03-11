@@ -335,7 +335,6 @@ class VisualEvaluationComparison(AbstractMultisourceEvaluationMetric):
             for j in range(col_cnt, n_cols):
                 axes[k + 1, j].axis("off")
 
-        plt.suptitle(channel)
         # Add one column-spanning colorbar per target-source column
         for src, col_idx in target_col_indices.items():
             col_axes = [ax for ax in axes[:, col_idx].tolist() if ax.get_visible()]

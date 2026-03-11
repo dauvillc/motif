@@ -63,18 +63,19 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             self.samples_iterator(), desc="Evaluating samples", total=self.n_samples
         ):
             sample_index = sample_df["sample_index"].iloc[0]
-            for src, true_obs_data in true_obs.items():
-                source_name, source_index = src.name, src.index
-                src_tuple = (source_name, source_index)
-                # We only evaluate sources that were masked, i.e. for which the availability flag
-                # is 0 (1 meaning available but not masked, -1 meaning not available).
-                if sample_df.loc[src_tuple, "avail"] != 0:
-                    continue
-                # Retrieve the list of channels for the source
-                channels = list(true_obs_data.data_vars.keys())
-                # Evaluate each model's predictions against the target data
-                # on every channel.
-                for model_id in self.model_data:
+
+            # Process each model, then for each model process each source.
+            for model_id, model_true_obs in true_obs.items():
+                for src, true_obs_data in model_true_obs.items():
+                    source_name, source_index = src.name, src.index
+
+                    # We only evaluate sources that were masked, i.e. for which the availability flag
+                    # is 0 (1 meaning available but not masked, -1 meaning not available).
+                    if sample_df.loc[(model_id, source_name, source_index), "avail"] != 0:
+                        continue
+                    # Retrieve the list of channels for the source
+                    channels = list(true_obs_data.data_vars.keys())
+
                     pred_data = preds[model_id][src]
                     for channel in channels:
                         pred_data_channel = pred_data[channel].values
@@ -134,8 +135,6 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             figsize=(col_width * n_channels, TWO_PANEL_HEIGHT * 2),
             squeeze=False,
         )
-        fig.suptitle("Radially Averaged Power Spectral Density Comparison")
-
         for col, channel in enumerate(channels):
             channel_results = results[results["channel"] == channel]
             ax_psd = axes[0, col]
@@ -172,7 +171,10 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             ax_psd.set_yscale("log")
             ax_psd.set_ylim(bottom=1e-2)
             ax_psd.grid(True, which="both", ls=":", lw=0.4, color="0.8")
-            ax_psd.legend()
+            if col == 0:
+                ax_psd.legend()
+            else:
+                ax_psd.get_legend().remove()
 
             # Row 1: PSD gain per model + reference line at 1
             sns.lineplot(
@@ -192,7 +194,10 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             ax_gain.set_yscale("log")
             ax_gain.set_ylim(bottom=1e-2, top=5)
             ax_gain.grid(True, which="both", ls=":", lw=0.4, color="0.8")
-            ax_gain.legend()
+            if col == 0:
+                ax_gain.legend()
+            else:
+                ax_gain.get_legend().remove()
 
         sns.despine(fig=fig)
         plt.tight_layout()

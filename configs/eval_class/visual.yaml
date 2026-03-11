@@ -5,6 +5,8 @@ inline_visual:
   cmap: viridis
   source_name_replacements: [
     ["tc_primed_pmw_", ""],
+    ["tc_primed_ir_tcirar", "Infrared"],
+    ["tc_primed_ir_hursat", "Infrared"],
     ["_", " "]
   ]
   channel_replacements: [

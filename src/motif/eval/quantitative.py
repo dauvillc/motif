@@ -125,14 +125,15 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
     def _process_sample(
         self,
         sample_df: pd.DataFrame,
-        true_obs: dict[SourceIndex, xr.Dataset],
+        true_obs: dict[str, dict[SourceIndex, xr.Dataset]],
         preds: dict[str, dict[SourceIndex, xr.Dataset]],
     ) -> list[dict]:
         """Process a single sample and return the results (helper method for parallel execution).
 
         Args:
             sample_df (pandas.DataFrame): DataFrame with sample metadata
-            true_obs (dict): Dict mapping source indices to true observation xarray datasets
+            true_obs (dict): Dict mapping model_ids to dicts of source indices
+                to true observation xarray datasets
             preds (dict): Dict mapping model_ids to dicts of source indices to prediction datasets
 
         Returns:
@@ -140,18 +141,19 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         """
         results = []
         sample_index = sample_df["sample_index"].iloc[0]
-        for src, true_obs_data in true_obs.items():
-            source_name, source_index = src.name, src.index
-            src_tuple = (source_name, source_index)
-            # We only evaluate sources that were masked, i.e. for which the availability flag
-            # is 0 (1 meaning available but not masked, -1 meaning not available).
-            if sample_df.loc[src_tuple, "avail"] != 0:
-                continue
-            # Retrieve the list of channels for the source
-            channels = list(true_obs_data.data_vars.keys())
-            # Evaluate each model's predictions against the target data
-            # on every channel.
-            for model_id in self.model_data:
+
+        # Process each model sequentially, then for each model process each source.
+        for model_id, model_true_obs in true_obs.items():
+            for src, true_obs_data in model_true_obs.items():
+                source_name, source_index = src.name, src.index
+
+                # We only evaluate sources that were masked, i.e. for which the availability flag
+                # is 0 (1 meaning available but not masked, -1 meaning not available).
+                if sample_df.loc[(model_id, source_name, source_index), "avail"] != 0:
+                    continue
+                    # Retrieve the list of channels for the source
+                channels = list(true_obs_data.data_vars.keys())
+
                 pred_data = preds[model_id][src]
                 for channel in channels:
                     pred_data_channel = pred_data[channel].values
@@ -272,13 +274,12 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="mae",
             data=results,
             showfliers=False,
-            color="black",
-            fill=False,
+            color="steelblue",
         )
-        plt.title("MAE distributions across models")
         plt.xlabel("Model")
-        plt.ylabel("Mean Absolute Error (MAE)")
+        plt.ylabel("MAE")
         plt.xticks(rotation=30, ha="right")
+        plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
         overall_mae_plot_file = self.overall_metrics_dir / "mae_boxplot_all_models.svg"
@@ -296,10 +297,10 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             errorbar=("ci", 95),
             color="steelblue",
         )
-        plt.title("MAE comparison across models")
         plt.xlabel("Model")
-        plt.ylabel("Mean Absolute Error (MAE)")
+        plt.ylabel("MAE")
         plt.xticks(rotation=30, ha="right")
+        plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
         overall_mae_barplot_file = self.overall_metrics_dir / "mae_barplot_all_models.svg"
@@ -330,10 +331,10 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             c="black",
             capsize=5,
         )
-        plt.title("RMSE comparison across models")
         plt.xlabel("Model")
-        plt.ylabel("Root Mean Squared Error (RMSE)")
+        plt.ylabel("RMSE")
         plt.xticks(rotation=30, ha="right")
+        ax.grid(axis="y")
         sns.despine()
         plt.tight_layout()
         overall_rmse_barplot_file = self.overall_metrics_dir / "rmse_barplot_all_models.svg"
@@ -349,13 +350,12 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="crps",
             data=results,
             showfliers=False,
-            color="black",
-            fill=False,
+            color="steelblue",
         )
-        plt.title("CRPS distributions across models")
         plt.xlabel("Model")
         plt.ylabel("CRPS")
         plt.xticks(rotation=30, ha="right")
+        plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
         overall_crps_plot_file = self.overall_metrics_dir / "crps_all_models.svg"
@@ -373,10 +373,10 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             errorbar=("ci", 95),
             color="steelblue",
         )
-        plt.title("Mean CRPS comparison across models")
         plt.xlabel("Model")
-        plt.ylabel("Continuous Ranked Probability Score (CRPS)")
+        plt.ylabel("CRPS")
         plt.xticks(rotation=30, ha="right")
+        plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
         overall_crps_barplot_file = self.overall_metrics_dir / "crps_barplot_all_models.svg"
@@ -394,14 +394,13 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 y="ssr",
                 data=results,
                 showfliers=False,
-                color="black",
-                fill=False,
+                color="steelblue",
             )
-            plt.title("SSR distributions across models")
             plt.xlabel("Model")
-            plt.ylabel("Skill-Spread Ratio (SSR)")
+            plt.ylabel("SSR")
             plt.axhline(y=1, color="black", linestyle="--", linewidth=1)
             plt.xticks(rotation=30, ha="right")
+            plt.grid(axis="y")
             sns.despine()
             plt.tight_layout()
             overall_ssr_plot_file = self.overall_metrics_dir / "ssr_all_models.svg"
@@ -419,11 +418,11 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 errorbar=("ci", 95),
                 color="steelblue",
             )
-            plt.title("Mean SSR comparison across models")
             plt.xlabel("Model")
-            plt.ylabel("Skill-Spread Ratio (SSR)")
+            plt.ylabel("SSR")
             plt.axhline(y=1, color="black", linestyle="--", linewidth=1)
             plt.xticks(rotation=30, ha="right")
+            plt.grid(axis="y")
             sns.despine()
             plt.tight_layout()
             overall_ssr_barplot_file = self.overall_metrics_dir / "ssr_barplot_all_models.svg"
@@ -443,13 +442,13 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 y="mae",
                 data=group,
                 showfliers=False,
-                color="black",
-                fill=False,
+                color="steelblue",
             )
             plt.title(f"MAE for {source_name} - {channel}")
             plt.xlabel("Model")
-            plt.ylabel("Mean Absolute Error (MAE)")
+            plt.ylabel("MAE")
             plt.xticks(rotation=30, ha="right")
+            plt.grid(axis="y")
             sns.despine()
             plt.tight_layout()
             mae_plot_file = self.mae_dir / f"mae_{source_name}_{channel}.svg"
@@ -470,8 +469,9 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             )
             plt.title(f"RMSE for {source_name} - {channel}")
             plt.xlabel("Model")
-            plt.ylabel("Root Mean Squared Error (RMSE)")
+            plt.ylabel("RMSE")
             plt.xticks(rotation=30, ha="right")
+            plt.grid(axis="y")
             sns.despine()
             plt.tight_layout()
             rmse_plot_file = self.rmse_dir / f"rmse_{source_name}_{channel}.svg"
