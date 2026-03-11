@@ -18,7 +18,7 @@ run_id: ???
 pred_name: ???
 wandb:
   name: ${pred_name}_${run_id}
-split: val  # Defaults to the validation set
+split: ???
 
 dataset:
   train:
