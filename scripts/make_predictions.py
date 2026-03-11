@@ -108,8 +108,6 @@ def main(raw_cfg: DictConfig):
     # Enable the full errors in Hydra
     os.environ["HYDRA_FULL_ERROR"] = "1"
 
-    OmegaConf.register_new_resolver("eval", eval)
-    OmegaConf.register_new_resolver("nan", lambda: float("nan"))
     cfg = cast(dict[str, Any], OmegaConf.to_object(raw_cfg))
 
     # Create the job object and submit it to the auto executor.
