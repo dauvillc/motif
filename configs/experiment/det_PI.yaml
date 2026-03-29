@@ -1,0 +1,36 @@
+# @package _global_
+defaults:
+  - override /sources: pmw_ir
+  - override /lightning_module: deterministic
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: det_PI
+  group: det_PI
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['pmw']
+
+model:
+  dropout: 0.0
+
+dataset:
+  train:
+    dt_min: -3.0
+    dt_max: 3.0
+    groups_availability:
+      # Second criterion: include at least 2 pmw obs, one
+      # of which will be masked.
+      pmw:
+        sources: ['pmw']
+        availability: [2, 2]
+      # Second criterion: at least one infrared obs.
+      ir:
+        sources: ['infrared']
+        availability: [1, 1]
+
+trainer:
+  strategy: ddp
