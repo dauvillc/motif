@@ -1,4 +1,4 @@
-"""Shared publication-quality plotting style for NeurIPS / ICML / ECML figures.
+"""Shared publication-quality plotting style for single-column article figures.
 
 Usage
 -----
@@ -22,17 +22,16 @@ import seaborn as sns
 # ---------------------------------------------------------------------------
 # Figure-size constants (all values in inches)
 # ---------------------------------------------------------------------------
-# NeurIPS two-column text width: 5.5 in; single column: 3.25 in
-# ICML single-column text width: ~6.75 in
-# For safety, TWO_COL_WIDTH = 5.5 covers both venues as a full-width figure.
+# Single-column article (e.g. JMLR, thesis, arXiv preprint) with ample space.
+# US Letter / A4 with standard margins gives ~6.5 in text width.
 
-SINGLE_COL_WIDTH: float = 3.25  # half-width in a two-column paper
-TWO_COL_WIDTH: float = 5.5  # full text width in a two-column paper
+SINGLE_COL_WIDTH: float = 4.0  # half-width figure in a single-column paper
+TWO_COL_WIDTH: float = 6.5  # full text width in a single-column paper
 
-PANEL_HEIGHT: float = 2.25  # standard single-metric panel
-TWO_PANEL_HEIGHT: float = 2.5  # side-by-side two-subplot figure
-TALL_PANEL_HEIGHT: float = 3.25  # taller panels (horizontal barplots with many labels)
-GRID_CELL_SIZE: float = 1.75  # per-cell size for visualization grids (was 3.0)
+PANEL_HEIGHT: float = 3.25  # standard single-metric panel
+TWO_PANEL_HEIGHT: float = 3.5  # side-by-side two-subplot figure
+TALL_PANEL_HEIGHT: float = 4.5  # taller panels (horizontal barplots with many labels)
+GRID_CELL_SIZE: float = 2.5  # per-cell size for visualization grids
 
 
 # ---------------------------------------------------------------------------
@@ -44,10 +43,10 @@ def apply_paper_style(use_latex: bool = False) -> None:
     """Configure matplotlib + seaborn for publication-quality paper figures.
 
     Sets seaborn theme to ``style="ticks"`` with ``context="paper"``, then
-    overrides rcParams for A4 single-column document conventions:
+    overrides rcParams for a single-column document with ample space:
 
-    - 11 pt body font, 10 pt tick/legend labels
-    - 1 pt line widths, 0.6 pt axis spines
+    - 13 pt body font, 12 pt tick/legend labels
+    - 1.5 pt line widths, 0.8 pt axis spines
     - No legend frame
     - PDF vector output (300 DPI raster fallback)
 
@@ -60,43 +59,43 @@ def apply_paper_style(use_latex: bool = False) -> None:
             Modern. Set to False to use DejaVu Sans — bundled with
             matplotlib, works on any machine with no TeX dependency.
     """
-    # "ticks" removes the heavy white-grid background; font_scale=1.3 gives
-    # 11 pt body text, readable in A4 single-column documents.
-    sns.set_theme(style="ticks", context="paper", font_scale=1.3)
+    # "ticks" removes the heavy white-grid background; font_scale=1.5 gives
+    # 13 pt body text, comfortable in a wide single-column layout.
+    sns.set_theme(style="ticks", context="paper", font_scale=1.5)
 
     rc: dict = {
         # --- Font (sans-serif fallback, overridden if use_latex=True) ---
         "font.family": "sans-serif",
         "font.sans-serif": ["DejaVu Sans", "Helvetica Neue", "Helvetica", "Arial"],
         # --- Font sizes ---
-        "font.size": 11,
-        "axes.labelsize": 11,
-        "axes.titlesize": 11,
-        "axes.titlepad": 4.0,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
+        "font.size": 13,
+        "axes.labelsize": 13,
+        "axes.titlesize": 13,
+        "axes.titlepad": 5.0,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
         # --- Legend ---
-        "legend.fontsize": 10,
-        "legend.title_fontsize": 10,
+        "legend.fontsize": 12,
+        "legend.title_fontsize": 12,
         "legend.frameon": False,
-        "legend.borderpad": 0.4,
+        "legend.borderpad": 0.5,
         # --- Lines ---
-        "lines.linewidth": 1.0,
-        "lines.markersize": 4.0,
+        "lines.linewidth": 1.5,
+        "lines.markersize": 6.0,
         # --- Axes geometry ---
-        "axes.linewidth": 0.6,
-        "axes.labelpad": 4.0,
+        "axes.linewidth": 0.8,
+        "axes.labelpad": 5.0,
         # --- Error bars ---
-        "errorbar.capsize": 3.0,
+        "errorbar.capsize": 4.0,
         # --- Ticks ---
-        "xtick.major.width": 0.6,
-        "ytick.major.width": 0.6,
-        "xtick.major.size": 3.0,
-        "ytick.major.size": 3.0,
-        "xtick.minor.width": 0.4,
-        "ytick.minor.width": 0.4,
-        "xtick.minor.size": 1.5,
-        "ytick.minor.size": 1.5,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+        "xtick.major.size": 4.0,
+        "ytick.major.size": 4.0,
+        "xtick.minor.width": 0.5,
+        "ytick.minor.width": 0.5,
+        "xtick.minor.size": 2.0,
+        "ytick.minor.size": 2.0,
         "xtick.direction": "out",
         "ytick.direction": "out",
         # --- Figure / saving ---

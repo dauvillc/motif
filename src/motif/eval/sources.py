@@ -116,8 +116,8 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
         ax.set_title("Counts of source combinations in evaluation samples")
         ax.set_xlabel("Count")
         ax.set_ylabel("Source combination")
-        # Reduce the font size of the y-axis labels as the combinations can be long
-        ax.tick_params(axis="y", labelsize=8)
+        # Slightly reduce y-axis label size as combination names can be long
+        ax.tick_params(axis="y", labelsize=10)
         sns.despine(fig=fig)
         plt.tight_layout()
         counts_plot_file = self.metric_results_dir / "source_combinations_counts.png"
@@ -162,7 +162,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
             ax[0].set_title("CRPS by source combination")
             ax[0].set_xlabel("CRPS")
             ax[0].set_ylabel("Source combination")
-            ax[0].tick_params(axis="y", labelsize=8)
+            ax[0].tick_params(axis="y", labelsize=10)
             # Disabled the axis's legend as we'll have a global one
             ax[0].legend_.remove()
             sns.barplot(
@@ -174,7 +174,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
             ax[1].set_title("Counts of source combinations")
             ax[1].set_xlabel("Count")
             ax[1].set_ylabel("Source combination")
-            ax[1].tick_params(axis="y", labelsize=8)
+            ax[1].tick_params(axis="y", labelsize=10)
             # Make sure the legend does not overlap with the plots
             fig.legend(
                 loc="upper center",

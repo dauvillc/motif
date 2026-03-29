@@ -85,8 +85,9 @@ class EvalJob(submitit.helpers.Checkpointable):
 
         # Load data for each model
         for model_id, model_spec in model_dict.items():
-            # Replace underscores in the model id with spaces (better for figures)
-            model_id = model_id.replace("_", " ")
+            # Replace double underscores with linebreaks and single underscores
+            # with spaces for better readability in plots.
+            model_id = model_id.replace("__", "\n").replace("_", " ")
 
             # Handle different model specification formats
             if isinstance(model_spec, tuple) or (

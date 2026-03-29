@@ -46,7 +46,7 @@ from tqdm import tqdm
 
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
-from motif.eval.plot_style import GRID_CELL_SIZE, apply_paper_style
+from motif.eval.plot_style import apply_paper_style
 from motif.eval.utils import format_tdelta
 
 
@@ -273,12 +273,6 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         model_ids = list(self.model_data.keys())
         n_avail = len(available_sources)
 
-        # Normalization shared by the groundtruth and all model predictions
-        norm = Normalize(
-            vmin=np.nanmin(target_sources[target_src]),
-            vmax=np.nanmax(target_sources[target_src]),
-        )
-
         # Number of realization columns per model: inspect shape of first prediction
         n_real_per_model: dict[str, int] = {}
         for model_id in model_ids:
@@ -289,6 +283,26 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 if len(pred.shape) == tgt_ndim + 1:
                     n_real = min(self.max_realizations_to_display, pred.shape[0])
             n_real_per_model[model_id] = n_real
+
+        # Normalization shared across all subplots (target, inputs, predictions)
+        all_arrays = (
+            [target_sources[target_src]]
+            + list(available_sources.values())
+            + [
+                pred_data[r, ...]
+                if len(pred_data.shape) == len(target_sources[target_src].shape) + 1
+                else pred_data
+                for model_id in model_ids
+                if target_src in predictions[model_id]
+                for r, pred_data in [
+                    (r, predictions[model_id][target_src])
+                    for r in range(n_real_per_model[model_id])
+                ]
+            ]
+        )
+        global_min = float(np.nanmin([np.nanmin(a) for a in all_arrays]))
+        global_max = float(np.nanmax([np.nanmax(a) for a in all_arrays]))
+        norm = Normalize(vmin=global_min, vmax=global_max)
 
         has_input_group = n_avail > 0
         gt_group_idx = 0
@@ -308,27 +322,29 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         n_pred_groups = len(pred_group_labels)
 
         # ---- Figure sizing ----
-        # Each image sub-column occupies GRID_CELL_SIZE inches; inter-group gaps add
-        # ~0.18 * GRID_CELL_SIZE of whitespace each; extra width is reserved for colorbar.
-        SPACER = 0.18  # spacer fraction of GRID_CELL_SIZE between groups
-        LABEL_H_RATIO = 0.12  # label row height relative to image row
+        # Each image sub-column occupies cell_size inches; inter-group gaps add
+        # ~SPACER * cell_size of whitespace each; extra width is reserved for colorbar.
+        cell_width = 1.5  # inches per image column
+        cell_height = 1.8  # inches per image row (independent of column width)
+        SPACER = 0.12  # spacer fraction of cell_width between groups
+        LABEL_H_RATIO = 0.08  # label row height relative to image row
         obs_effective = sum(obs_group_col_counts) + SPACER * (n_obs_groups - 1)
         pred_effective = sum(pred_group_col_counts) + SPACER * (n_pred_groups - 1)
-        fig_width = GRID_CELL_SIZE * max(obs_effective, pred_effective) + 0.7
-        fig_height = GRID_CELL_SIZE * 2 * (1.0 + LABEL_H_RATIO) + 0.4  # two image rows
+        fig_width = cell_width * max(obs_effective, pred_effective) + 0.4
+        fig_height = cell_height * 2 * (1.0 + LABEL_H_RATIO) + 0.2  # two image rows
 
         fig = plt.figure(figsize=(fig_width, fig_height))
 
         # Outer GridSpec: two rows (obs, pred), each containing its own label+image sub-grid.
-        outer_gs = GridSpec(nrows=2, ncols=1, figure=fig, hspace=0.55)
+        outer_gs = GridSpec(nrows=2, ncols=1, figure=fig, hspace=0.65)
 
         obs_gs = GridSpecFromSubplotSpec(
             nrows=2,
             ncols=n_obs_groups,
             subplot_spec=outer_gs[0],
             height_ratios=[LABEL_H_RATIO, 1.0],
-            hspace=0.50,
-            wspace=0.25,
+            hspace=0.65,
+            wspace=0.15,
             width_ratios=obs_group_col_counts,
         )
         pred_gs = GridSpecFromSubplotSpec(
@@ -336,8 +352,8 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             ncols=n_pred_groups,
             subplot_spec=outer_gs[1],
             height_ratios=[LABEL_H_RATIO, 1.0],
-            hspace=0.50,
-            wspace=0.25,
+            hspace=0.65,
+            wspace=0.15,
             width_ratios=pred_group_col_counts,
         )
 
@@ -364,7 +380,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
 
             col_count = obs_group_col_counts[g_local]
             is_multi_input_group = has_input_group and g_local == 1 and col_count > 1
-            inner_wspace = 0.42 if is_multi_input_group else 0.05
+            inner_wspace = 0.20 if is_multi_input_group else 0.05
             inner_gs = GridSpecFromSubplotSpec(
                 nrows=1,
                 ncols=col_count,
@@ -406,7 +422,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         if has_input_group:
             for c, (src, dt) in enumerate(available_sources.keys()):
                 ax = image_axes[(1, c)]
-                ax.imshow(available_sources[(src, dt)], aspect="auto", cmap=self.cmap)
+                ax.imshow(available_sources[(src, dt)], aspect="equal", cmap=self.cmap, norm=norm)
                 dt_str = format_tdelta(dt)
                 display = self._display_src_name(src.name)
                 ax.set_title(f"{display}\n$\\delta t$ = {dt_str}", fontsize=7)
