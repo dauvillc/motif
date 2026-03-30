@@ -15,7 +15,35 @@ One of the modules is deterministic (trained with the MSE as loss function), whi
   * Training in a self-supervised setting: randomly mask and reconstruct a source for each sample;
   * Training or fine-tuning in a supervised manner by always masking the same source. The embedding layers, backbone and output layers can be frozen or reset.
 
+# Repository organization
+```
+motif/
+├── configs/               Hydra configuration files
+│   ├── experiment/        Experiment definitions (model, data, and training settings)
+│   ├── inference_cfg/     Inference configurations (dataset filtering, number of realizations)
+│   ├── eval_class/        Evaluation class configurations
+│   ├── model/             Model architecture configurations
+│   ├── paths/             Environment-specific data paths
+│   └── setup/             Compute setup configurations (local or SLURM)
+├── preproc/               Preprocessing scripts
+│   └── tc_primed/         TC-PRIMED download and preprocessing
+├── scripts/               Entry-point scripts (train.py, make_predictions.py, eval.py)
+└── src/motif/             Main package
+    ├── data/              Dataset, collation, and source definitions
+    ├── eval/              Evaluation metrics and visualizations
+    ├── lightning_module/  Lightning modules (deterministic and flow matching)
+    ├── models/            Model architecture (backbone, embedding, and output layers)
+    └── utils/             Utility functions
+```
+
 # Running experiments
+## Setting up the environment
+The project requires Python 3.12 and uses [uv](https://docs.astral.sh/uv/) for dependency management. To install the dependencies and the package in a virtual environment, run
+```
+uv sync
+```
+from the repository root. The package can then be used by activating the virtual environment with `source .venv/bin/activate`, or by prefixing commands with `uv run`.
+
 ## Setting up the dataset
 The first step is to set the paths for your own environment by creating your own configuration in ```configs/paths/```, using ```configs/paths/example.yaml``` as base.
 ## Downloading the dataset
