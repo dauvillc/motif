@@ -1,2 +1,0 @@
-embeddings:
-  _target_: motif.eval.embeddings.EmbeddingsComparisonEvaluation

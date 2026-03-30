@@ -1,2 +1,0 @@
-dist_to_center:
-  _target_: motif.eval.dist_to_center.DistanceToCenter
