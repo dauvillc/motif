@@ -67,6 +67,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         max_realizations_to_display: int = 3,
         cmap: str = "viridis",
         num_workers: int = 10,
+        sample_index: int | None = None,
         **kwargs,
     ):
         """
@@ -74,9 +75,12 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             model_data: Dictionary mapping model_ids to model specifications.
             parent_results_dir: Parent directory for all results.
             eval_fraction: Fraction of samples to visualize (0.0 to 1.0).
+                Ignored when ``sample_index`` is set.
             max_realizations_to_display: Maximum number of realizations to show per model.
             cmap: Matplotlib colormap name.
             num_workers: Number of parallel workers.
+            sample_index: If given, only the sample at this 0-based iteration
+                index is processed.  Takes precedence over ``eval_fraction``.
             **kwargs: Additional keyword arguments forwarded to the base class.
         """
         super().__init__(
@@ -90,11 +94,31 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         self.max_realizations_to_display = max_realizations_to_display
         self.cmap = cmap
         self.num_workers = num_workers
+        self.sample_index = sample_index
 
     def evaluate(self, **kwargs):
         """Creates inline visualization figures for all (or a random subset of) samples."""
-        n_samples = int(self.eval_fraction * self.n_samples)
-        if self.eval_fraction < 1.0:
+        if self.sample_index is not None:
+            n_samples = 1
+            selected_indices = {self.sample_index}
+
+            def samples_iterator() -> Generator[
+                tuple[
+                    pd.DataFrame,
+                    dict[str, dict[SourceIndex, xr.Dataset]],
+                    dict[str, dict[SourceIndex, xr.Dataset]],
+                ],
+                None,
+                None,
+            ]:
+                return (
+                    (df, true_obs, preds)
+                    for i, (df, true_obs, preds) in enumerate(self.samples_iterator())
+                    if i in selected_indices
+                )
+
+        elif self.eval_fraction < 1.0:
+            n_samples = int(self.eval_fraction * self.n_samples)
             rng = np.random.default_rng(seed=42)
             selected_indices = set(rng.choice(self.n_samples, size=n_samples, replace=False))
 
@@ -114,6 +138,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 )
 
         else:
+            n_samples = int(self.eval_fraction * self.n_samples)
             samples_iterator = self.samples_iterator
 
         samples = list(samples_iterator())
@@ -344,7 +369,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
             subplot_spec=outer_gs[0],
             height_ratios=[LABEL_H_RATIO, 1.0],
             hspace=0.65,
-            wspace=0.15,
+            wspace=0.35,
             width_ratios=obs_group_col_counts,
         )
         pred_gs = GridSpecFromSubplotSpec(
@@ -380,7 +405,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
 
             col_count = obs_group_col_counts[g_local]
             is_multi_input_group = has_input_group and g_local == 1 and col_count > 1
-            inner_wspace = 0.20 if is_multi_input_group else 0.05
+            inner_wspace = 0.40 if is_multi_input_group else 0.05
             inner_gs = GridSpecFromSubplotSpec(
                 nrows=1,
                 ncols=col_count,
@@ -425,7 +450,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 ax.imshow(available_sources[(src, dt)], aspect="equal", cmap=self.cmap, norm=norm)
                 dt_str = format_tdelta(dt)
                 display = self._display_src_name(src.name)
-                ax.set_title(f"{display}\n$\\delta t$ = {dt_str}", fontsize=7)
+                ax.set_title(f"{display}\n$\\Delta t$ = {dt_str}", fontsize=7)
                 self._set_coords_as_ticks(ax, lats[src], lons[src], write_labels=False)
 
         # ---- Plot: Groundtruth observation (single target source) ----
@@ -435,7 +460,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         any_model = next(iter(model_ids))
         dt = cast(pd.Timedelta, sample_df.loc[(any_model, target_src.name, target_src.index), "dt"])
         gt_ax.set_title(
-            f"{self._display_src_name(target_src.name)}\n$\\delta t$ = {format_tdelta(dt)}",
+            f"{self._display_src_name(target_src.name)}\n$\\Delta t$ = {format_tdelta(dt)}",
             fontsize=7,
         )
         self._set_coords_as_ticks(gt_ax, lats[target_src], lons[target_src], write_labels=True)
@@ -493,15 +518,15 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
 
     @staticmethod
     def _set_coords_as_ticks(
-        ax: Any, lats: np.ndarray, lons: np.ndarray, n_ticks: int = 5, write_labels: bool = True
+        ax: Any, lats: np.ndarray, lons: np.ndarray, write_labels: bool = True
     ):
         """Set lat/lon coordinates as axis tick labels."""
-        x_indices = np.linspace(0, len(lons[0]) - 1, n_ticks, dtype=int)
-        y_indices = np.linspace(0, len(lats[:, 0]) - 1, n_ticks, dtype=int)
+        x_indices = np.array([0, len(lons[0]) - 1])
+        y_indices = np.array([0, len(lats[:, 0]) - 1])
         ax.set_xticks(x_indices)
-        ax.set_xticklabels([f"{lons[0, i]:.2f}" for i in x_indices], rotation=45, fontsize=6)
+        ax.set_xticklabels([f"{lons[0, i]:.1f}" for i in x_indices], rotation=45, fontsize=6)
         ax.set_yticks(y_indices)
-        ax.set_yticklabels([f"{lats[i, 0]:.2f}" for i in y_indices], fontsize=6)
+        ax.set_yticklabels([f"{lats[i, 0]:.1f}" for i in y_indices], fontsize=6)
         if write_labels:
             ax.set_xlabel("Longitude", fontsize=7)
             ax.set_ylabel("Latitude", fontsize=7)
