@@ -13,11 +13,13 @@ wheels/
 .vscode/
 .idea/
 .github/
+.claude/settings.json
 
 # Output directories
 outputs/
 logs/
 submitit/
+multirun/
 
 # PyTorch Lightning
 lightning_logs/
@@ -30,6 +32,7 @@ wandb/
 .ipynb_checkpoints/
 
 # General/Misc
+models.md
 .DS_Store
 .mypy_cache/
 .pytest_cache/
