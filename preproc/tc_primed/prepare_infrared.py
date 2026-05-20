@@ -29,7 +29,7 @@ from preproc.tc_primed.utils import list_tc_primed_sources
 TCIRAR_OR_HURSAT = [None, "tcirar", "hursat"]
 
 
-def initialize_metadata(dest_dir):
+def initialize_metadata(dest_dir: Path) -> bool:
     """Initializes the metadata for either TCIRAR or HURSAT infrared source.
     Args:
         dest_dir (Path): Destination directory.
@@ -60,7 +60,9 @@ def initialize_metadata(dest_dir):
     return True
 
 
-def process_ir_file(file, dest_dirs, check_exist=False):
+def process_ir_file(
+    file: str, dest_dirs: dict, check_exist: bool = False
+) -> tuple[dict | None, str | None]:
     """Processes a single infrared file.s
     Args:
         file (str): Path to the input file.
