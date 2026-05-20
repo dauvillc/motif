@@ -127,9 +127,10 @@ def apply_paper_style(use_latex: bool = False) -> None:
 def get_model_palette(n_models: int) -> list:
     """Return a colorblind-safe palette for ``n_models`` distinct series.
 
-    Uses the Wong (2011) eight-color set via seaborn ``"colorblind"``,
-    distinguishable under deuteranopia, protanopia, and tritanopia. Falls
-    back to ``"tab10"`` when more than eight colors are needed.
+    Uses the Wong (2011) eight-color set via seaborn ``"colorblind"`` for
+    ≤8 colors (distinguishable under deuteranopia, protanopia, tritanopia).
+    For >8 colors, extends with Tol's muted palette (12 colors, also
+    colorblind-safe), cycling if more than 12 are requested.
 
     Args:
         n_models: Number of models / distinct series to color.
@@ -139,4 +140,20 @@ def get_model_palette(n_models: int) -> list:
     """
     if n_models <= 8:
         return sns.color_palette("colorblind", n_models)
-    return sns.color_palette("tab10", n_models)
+    # Tol muted palette — colorblind-safe up to 12 colors.
+    _TOL_MUTED = [
+        (0.333, 0.475, 0.667),  # indigo
+        (0.533, 0.800, 0.933),  # cyan
+        (0.133, 0.533, 0.200),  # green
+        (0.800, 0.533, 0.533),  # rose
+        (0.867, 0.800, 0.467),  # sand
+        (0.667, 0.400, 0.800),  # purple
+        (0.400, 0.667, 0.600),  # teal
+        (0.933, 0.667, 0.400),  # orange
+        (0.667, 0.667, 0.667),  # gray
+        (0.533, 0.333, 0.133),  # wine
+        (0.800, 0.933, 0.533),  # light green
+        (0.933, 0.933, 0.533),  # light yellow
+    ]
+    palette = [_TOL_MUTED[i % len(_TOL_MUTED)] for i in range(n_models)]
+    return palette

@@ -450,7 +450,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 ax.imshow(available_sources[(src, dt)], aspect="equal", cmap=self.cmap, norm=norm)
                 dt_str = format_tdelta(dt)
                 display = self._display_src_name(src.name)
-                ax.set_title(f"{display}\n$\\Delta t$ = {dt_str}", fontsize=7)
+                ax.set_title(f"{display}\n$\\Delta t$ = {dt_str}", fontsize=8)
                 self._set_coords_as_ticks(ax, lats[src], lons[src], write_labels=False)
 
         # ---- Plot: Groundtruth observation (single target source) ----
@@ -461,7 +461,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         dt = cast(pd.Timedelta, sample_df.loc[(any_model, target_src.name, target_src.index), "dt"])
         gt_ax.set_title(
             f"{self._display_src_name(target_src.name)}\n$\\Delta t$ = {format_tdelta(dt)}",
-            fontsize=7,
+            fontsize=8,
         )
         self._set_coords_as_ticks(gt_ax, lats[target_src], lons[target_src], write_labels=True)
 
@@ -485,7 +485,7 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
                 realization = pred_data[r, ...] if is_multi_real else pred_data
                 ax.imshow(realization, aspect="equal", cmap=self.cmap, norm=norm)
                 title = display if n_real == 1 else f"{display} ({r + 1})"
-                ax.set_title(title, fontsize=7)
+                ax.set_title(title, fontsize=8)
                 ax.set_xticks([])
                 ax.set_yticks([])
                 if not is_multi_real:
@@ -521,8 +521,10 @@ class InlineVisualEval(AbstractMultisourceEvaluationMetric):
         ax: Any, lats: np.ndarray, lons: np.ndarray, write_labels: bool = True
     ):
         """Set lat/lon coordinates as axis tick labels."""
-        x_indices = np.array([0, len(lons[0]) - 1])
-        y_indices = np.array([0, len(lats[:, 0]) - 1])
+        nx = len(lons[0])
+        ny = len(lats[:, 0])
+        x_indices = np.array([0, nx // 2, nx - 1])
+        y_indices = np.array([0, ny // 2, ny - 1])
         ax.set_xticks(x_indices)
         ax.set_xticklabels([f"{lons[0, i]:.1f}" for i in x_indices], rotation=45, fontsize=6)
         ax.set_yticks(y_indices)
