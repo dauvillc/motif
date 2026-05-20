@@ -26,6 +26,9 @@ lightning_logs/
 # Weights & Biases
 wandb/
 
+# Jupyter
+.ipynb_checkpoints/
+
 # General/Misc
 .DS_Store
 .mypy_cache/
