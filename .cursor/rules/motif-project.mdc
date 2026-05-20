@@ -1,0 +1,25 @@
+---
+description: Motif project architecture and invariants
+alwaysApply: true
+---
+
+# motif project context
+
+Multi-source tropical cyclone interpolation: PyTorch 2.8 + Lightning + Hydra.
+
+## Key modules
+
+- Data: `src/motif/data/multi_source_dataset.py`, `source.py`, `collate_fn.py`
+- Training: `src/motif/lightning_module/base_module.py`, `deterministic.py`, `flow_matching.py`
+- Entry points: `scripts/train.py`, `make_predictions.py`, `eval.py`
+
+## Invariants
+
+- Batches are dicts keyed by `(source_name, obs_index)` with coords/values/availability.
+- Reuse `preproc_input` and `compute_loss_mask` in `base_module` — do not add custom masking.
+- Respect `Source` input/output masks for new sources and backbones.
+- Models and eval metrics are config-driven (`_target_` in YAML), not hardcoded.
+
+## Docs
+
+Full context: [CLAUDE.md](../../CLAUDE.md). HPC commands: [commands.md](../../commands.md).

@@ -1,0 +1,31 @@
+---
+description: Hydra config conventions for motif
+globs: configs/**
+alwaysApply: false
+---
+
+# Hydra configs
+
+## Config groups (train)
+
+Mirror [configs/train.yaml](../../configs/train.yaml) groups: `paths`, `sources`, `model`, `experiment`, `setup`, `dataset`, `dataloader`, `lightning_module`, `wandb`, `data_augmentation`.
+
+Required at CLI (marked `???` in defaults): `paths`, `sources`, `model`, `experiment`, `setup`.
+
+## New YAML entries
+
+```yaml
+_target_: motif.some.module.Class
+# optional nested instantiate:
+_convert_: partial
+```
+
+- **paths**: copy [configs/paths/example.yaml](../../configs/paths/example.yaml) — do not commit real machine paths.
+- **experiment**: compose model + lightning_module + dataset overrides; follow naming in `configs/experiment/`.
+- **eval_class**: must point to a class inheriting `motif.eval.abstract_evaluation_metric.AbstractEvaluationMetric`.
+- **inference_cfg**: must align with `run_id` checkpoint experiment when used in eval.
+
+## Overrides
+
+- Add new keys with `+key=value`; change existing with `key=value`.
+- Local SLURM bypass: `+launch_without_submitit=true`.

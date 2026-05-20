@@ -1,0 +1,35 @@
+---
+description: Hydra entrypoint scripts (train, predict, eval)
+globs: scripts/**
+alwaysApply: false
+---
+
+# Scripts entry points
+
+All use `@hydra.main(config_path="../configs", config_name=...)`.
+
+## train.py
+
+- Config: `configs/train.yaml`
+- Submitit/SLURM by default; local: `+launch_without_submitit=true`
+- Resume: `+resume_run_id=<id>`, `+resume_mode=resume|fine_tune`
+- Checkpoints under `paths.checkpoints/<run_id>`
+
+## make_predictions.py
+
+- Requires: `run_id`, `inference_cfg`, `split`
+- Reloads experiment cfg from checkpoint; writes `paths.predictions/<run_id>/<pred_name>/`
+- Multirun: `run_id=a,b,c` with `--multirun`
+
+## eval.py
+
+- `models` dict: `{DisplayName: [run_id, inference_cfg]}`
+- `eval_class` list must match classes used at prediction time
+- Optional: `+eval_name`, `checks_strictness=targets_only`
+
+Example:
+
+```bash
+python scripts/train.py experiment=det_pmw model=motif_12b_d512 setup=local \
+  paths=local dataloader.batch_size=2 wandb.name=debug +launch_without_submitit=true +wandb.mode=disabled
+```

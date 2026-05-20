@@ -1,4 +1,7 @@
 # Spatiotemporal data interpolation via multi-source generative modeling in an application to tropical cyclones
+
+AI agents: see [CLAUDE.md](CLAUDE.md) for project context and workflows.
+
 This repository implements a framework for interpolating images of tropical cyclones using multiple sources as input.
 
 The framework is built with [PyTorch](https://pytorch.org/) and [Lightning](https://lightning.ai/docs/pytorch/stable/). It relies on [Hydra](https://hydra.cc/docs/intro/) for managing configurations and [Weights and Biases](https://wandb.ai/site/) for logging experiments. It includes multiple blocks:

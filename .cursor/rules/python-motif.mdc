@@ -1,0 +1,26 @@
+---
+description: Python coding standards for motif
+globs: src/**/*.py,scripts/**/*.py,preproc/**/*.py
+alwaysApply: false
+---
+
+# Python (motif)
+
+## Tooling
+
+- Env: `uv sync`; run via `uv run` or activated `.venv`.
+- Format/lint: Ruff per [pyproject.toml](../../pyproject.toml) (line length 100, double quotes).
+- Imports: package is `motif` (e.g. `from motif.data.collate_fn import multi_source_collate_fn`).
+
+## Patterns
+
+- New classes: register with Hydra `_target_: motif.module.Class` and `hydra.utils.instantiate`.
+- Datasets: support `_convert_: partial` where existing configs do.
+- Torch **2.8.0**; use Lightning APIs already in the codebase (Trainer, `ModelCheckpoint`, `LearningRateMonitor`).
+- Extend `LightningModule` via `base_module` — share preprocessing and loss masking.
+
+## Local debug
+
+- `+wandb.mode=disabled`, `+launch_without_submitit=true`
+- `+dataset.train.limit_samples=N` for smoke tests
+- `dataloader.num_workers=0` when debugging DataLoader issues
