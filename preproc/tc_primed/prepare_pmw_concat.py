@@ -10,6 +10,7 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
 from pathlib import Path
+from typing import Any, Dict, cast
 
 import hydra
 import pandas as pd
@@ -18,6 +19,7 @@ import yaml
 from global_land_mask import globe
 from netCDF4 import Dataset
 from omegaconf import OmegaConf
+from pandas import Timedelta
 from tqdm import tqdm
 from xarray.backends import NetCDF4DataStore
 
@@ -46,7 +48,7 @@ for sensor in SENSOR_VARIABLES:
         SENSOR_VARIABLES[sensor][freq] = (swath, [f"TB_{var}" for var in vars])
 
 
-def parse_frequency(pm_var_name):
+def parse_frequency(pm_var_name: str) -> float:
     """Parse frequency from PMW variable name."""
     freq = pm_var_name.split("_")[1]
     for char in ["A", "B", "H", "V", "Q"]:
@@ -54,7 +56,7 @@ def parse_frequency(pm_var_name):
     return float(freq)
 
 
-def preprocess_pmw(ds):
+def preprocess_pmw(ds: xr.Dataset) -> xr.Dataset:
     """Preprocess PMW data by standardizing dimensions and variables."""
     ds = ds.drop_vars(["ScanTime", "angle_bins", "x", "y"])
     # Make sure latitude and longitude are coordinates
@@ -64,7 +66,7 @@ def preprocess_pmw(ds):
     return ds
 
 
-def initialize_pmw_metadata(sensat, ifovs, dest_dir):
+def initialize_pmw_metadata(sensat: str, ifovs: dict, dest_dir: Path) -> bool:
     """Retrieves the list of all data and
     characteristic variables of a source; and writes the source metadata file.
     Args:
@@ -123,7 +125,14 @@ def initialize_pmw_metadata(sensat, ifovs, dest_dir):
     return True
 
 
-def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=False, ifovs=None):
+def process_pmw_file(
+    file: str,
+    sensat: str,
+    dest_dir: Path,
+    check_older: Timedelta | None = None,
+    to_regular_grid: bool = False,
+    ifovs: dict | None = None,
+) -> dict | None:
     """Processes a single PMW file.
     Args:
         file (str): Path to the PMW file in netCDF4 format.
@@ -197,6 +206,8 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
         ds89["longitude"].values = (ds89["longitude"].values + 180) % 360 - 180
 
         # OPTIONAL REGRIDDING TO REGULAR GRID
+        regridding_res: float = float("nan")
+        target_area = None
         if to_regular_grid:
             if ifovs is None:
                 raise ValueError("ifovs must be provided if to_regular_grid is True.")
@@ -213,7 +224,7 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
 
             # Regrid the 89GHz data to the regular grid
             try:
-                ds89, target_area = regrid(ds89, regridding_res, return_area=True)
+                ds89, target_area = regrid(ds89, regridding_res)
                 # Check if any variable is fully null after regridding
                 for variable in ds89.variables:
                     if ds89[variable].isnull().all():
@@ -235,7 +246,7 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
         # Regrid to the 89GHz grid
         try:
             if to_regular_grid:
-                ds37 = regrid(ds37, regridding_res, target_area=target_area)
+                ds37, _ = regrid(ds37, regridding_res, target_area=target_area)
             else:
                 ds37 = regrid_to_grid(ds37, ds89["latitude"].values, ds89["longitude"].values)
             # Check if any variable is fully null after regridding. If so, skip the sample.
@@ -294,9 +305,10 @@ def process_pmw_file(file, sensat, dest_dir, check_older=None, to_regular_grid=F
 
 
 @hydra.main(config_path="../../configs/", config_name="preproc", version_base=None)
-def main(cfg):
+def main(raw_cfg):
     """Main function to process PMW data."""
-    cfg = OmegaConf.to_container(cfg, resolve=True)
+    cfg = OmegaConf.to_container(raw_cfg, resolve=True)
+    cfg = cast(Dict[str, Dict[str, Any]], cfg)  # For better type checking
 
     # Setup paths
     tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
@@ -306,11 +318,14 @@ def main(cfg):
     # Retrieve configuration options
     include_seasons = cfg.get("include_seasons", None)
     check_older = cfg.get("check_older", None)
-    check_older = pd.to_timedelta(check_older) if check_older is not None else None
-    use_regular_grid = cfg.get("use_regular_grid_pmw", False)
+    if check_older is not None:
+        check_older = pd.to_timedelta(str(check_older))
+    use_regular_grid = cast(bool, cfg.get("use_regular_grid_pmw", False))
     if use_regular_grid:
         # If using regular grid, change destination path to avoid overwriting
         dest_path = Path(cfg["paths"]["preprocessed_dataset_regular"]) / "prepared"
+    num_workers = cast(int, cfg.get("num_workers", 1))
+    chunksize = cast(int, cfg.get("chunksize", 64))
 
     # Read the IFOV values file
     with open(ifovs_path, "r") as f:
@@ -334,8 +349,6 @@ def main(cfg):
         # Process all files, and keep count of discarded files and save the metadata of
         # each sample.
         discarded, samples_metadata = 0, []
-        num_workers = cfg.get("num_workers", 1)
-        chunksize = cfg.get("chunksize", 64)
 
         if num_workers <= 1:
             for file in tqdm(pmw_files[sensat], desc=f"Processing {sensat}"):

@@ -196,7 +196,7 @@ def process_overpass_file(
             # Regrid from satellite geometry to a regular grid
             try:
                 # Regrid from satellite geometry to a regular lat/lon grid
-                ds = regrid(ds, regrid_to_res)
+                ds, _ = regrid(ds, regrid_to_res)
                 # Check if any variable is fully null after regridding. If so, skip the sample.
                 for variable in ds.variables:
                     if ds[variable].isnull().all():

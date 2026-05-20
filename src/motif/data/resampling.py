@@ -95,8 +95,7 @@ def regrid(
     target_resolution: float,
     has_channel_dimension: bool = False,
     target_area: AreaDefinition | None = None,
-    return_area: bool = False,
-) -> xr.Dataset | tuple[xr.Dataset, AreaDefinition]:
+) -> tuple[xr.Dataset, AreaDefinition]:
     """Regrids the dataset ds to a regular grid with a given target resolution.
     Uses an equiangular (Plate Carrée) projection.
 
@@ -110,13 +109,10 @@ def regrid(
         target_area: If provided, the target area
             definition to use for regridding. If None, a new area definition is created
             based on the target resolution and the extent of the swath.
-        return_area: Whether to return the target area definition along with
-            the regridded dataset.
 
     Returns:
         xr.Dataset: The regridded dataset.
-        (DynamicAreaDefinition, optional): The target area definition,
-            returned if return_area is True.
+        DynamicAreaDefinition: The target area definition.
     """
     # Get the dimensions from the latitude variable
     dims = list(ds.latitude.dims)
@@ -215,9 +211,7 @@ def regrid(
     }
     # Rebuild the dataset
     result = xr.Dataset(result, coords=coords)
-    if return_area:
-        return result, target_area
-    return result
+    return result, target_area
 
 
 def regrid_to_grid(
