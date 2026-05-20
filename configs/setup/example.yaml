@@ -1,0 +1,31 @@
+# @package _global_
+defaults:
+  - override /paths: name of the paths config here
+
+# The following section must be set to directly submit the experiments
+# as SLURM jobs.
+setup:
+  timeout_min:
+  cpus_per_task: 24 
+  slurm_ntasks_per_node: ${trainer.devices}
+  slurm_gres: "gpu:4"
+  name: ${wandb.name}
+  slurm_constraint: 
+  slurm_qos: 
+  slurm_account: 
+  slurm_signal_delay_s: 120
+  slurm_additional_parameters:
+    hint: nomultithread
+  local_setup:
+    - first preparation command
+    - second preparation command
+    # add more commands as needed
+  
+# The following must be set to run the experiment locally.
+trainer:
+  devices: 4  # Set a value adapted to your hardware.
+
+dataloader:
+  num_workers: 23 # Usually set to number of CPU cores minus one
+
+checkpoint_time_interval: 30  # in minutes

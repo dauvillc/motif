@@ -1,0 +1,15 @@
+# Path to where the unpreprocessed datasets are stored
+raw_datasets: write/path/here/
+# Path to where the preprocessed dataset will be saved
+preprocessed_dataset: 
+# Lightning checkpoints directory
+checkpoints: 
+# Weights and Biases logs directory
+wandb_logs: 
+# Validation figures directory
+validation: 
+# Directory for the predictions (arrays)
+predictions: 
+# Directory for the results (figures, tables, etc.)
+results: 
+
