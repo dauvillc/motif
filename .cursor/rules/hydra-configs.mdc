@@ -21,7 +21,7 @@ _convert_: partial
 ```
 
 - **paths**: copy [configs/paths/example.yaml](../../configs/paths/example.yaml) — do not commit real machine paths.
-- **experiment**: compose model + lightning_module + dataset overrides; follow naming in `configs/experiment/`.
+- **experiment**: compose model + lightning_module + dataset overrides. Current naming: `fm_ssl_{M|I|IM}_w6h` (SSL, 6h window), `fm_sup_IM_w6h` (supervised GMI target). Legacy presets in `configs/experiment/old/`.
 - **eval_class**: must point to a class inheriting `motif.eval.abstract_evaluation_metric.AbstractEvaluationMetric`.
 - **inference_cfg**: must align with `run_id` checkpoint experiment when used in eval.
 

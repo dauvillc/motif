@@ -1,0 +1,35 @@
+# @package _global_
+defaults:
+  - override /sources: ir_gmi
+  - override /lightning_module: flow_matching
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: fm_ssl_I_w6h
+  group: fm_I_w6h
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['GMI_GPM']
+
+model:
+  dropout: 0.0
+
+dataset:
+  train:
+    dt_min: -6.0
+    dt_max: 0.0
+    groups_availability:
+      # First criterion: include on GMI obs
+      gmi:
+        sources: ['GMI_GPM']
+        availability: [1, 1]
+      # Second criterion: include at least one infrared obs as input
+      ir:
+        sources: ['infrared']
+        availability: [1, 3]
+
+trainer:
+  strategy: ddp_find_unused_parameters_true

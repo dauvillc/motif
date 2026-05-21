@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - override /sources: pmw_37_89
+  - override /lightning_module: flow_matching
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: fm_ssl_M_w6h
+  group: fm_M_w6h
+
+lightning_module:
+  patch_size: 4
+
+model:
+  dropout: 0.0
+
+dataset:
+  train:
+    dt_min: -6.0
+    dt_max: 0.0
+    groups_availability:
+      # First criterion: include at least 2 pmw obs
+      pmw:
+        sources: ['pmw']
+        availability: [2, 3]
+
+trainer:
+  strategy: ddp

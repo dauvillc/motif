@@ -1,0 +1,49 @@
+# @package _global_
+defaults:
+  - override /sources: pmw_ir
+  - override /lightning_module: flow_matching
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: fm_sup_IM_w6h
+  group: fm_sup_IM_w6h
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['tc_primed_pmw_GMI_GPM']
+
+model:
+  dropout: 0.0
+
+dataset:
+  train:
+    dt_min: -6.0
+    dt_max: 0.0
+    groups_availability:
+      # Include one GPM obs to be masked
+      gpm:
+        sources: ['tc_primed_pmw_GMI_GPM'] 
+        availability: [1, 1]
+      # Include at least one PMW obs
+      pmw:
+        sources:
+          - tc_primed_pmw_AMSR2_GCOMW1
+          - tc_primed_pmw_TMI_TRMM
+          - tc_primed_pmw_SSMI_F11
+          - tc_primed_pmw_SSMI_F13
+          - tc_primed_pmw_SSMI_F14
+          - tc_primed_pmw_SSMI_F15
+          - tc_primed_pmw_SSMIS_F16
+          - tc_primed_pmw_SSMIS_F17
+          - tc_primed_pmw_SSMIS_F18
+          - tc_primed_pmw_SSMIS_F19
+        # Min, max number of sources from the group
+        availability: [1, 2]
+      # Possibly include one infrared obs as input
+      infrared:
+        sources: ['infrared']
+        availability: [0, 3]
+trainer:
+  strategy: ddp_find_unused_parameters_true

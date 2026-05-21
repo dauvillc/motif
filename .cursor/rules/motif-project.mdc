@@ -7,6 +7,13 @@ alwaysApply: true
 
 Multi-source tropical cyclone interpolation: PyTorch 2.8 + Lightning + Hydra.
 
+## Research goals
+
+- **SSL modality**: compare **M** vs **I** vs **IM** — `fm_ssl_M_w6h`, `fm_ssl_I_w6h`, `fm_ssl_IM_w6h`.
+- **Supervised baseline** (GMI target only): `fm_sup_IM_w6h`.
+- **Architecture on IM** (planned): **MOTIFGen** (`MultisourceGeneralBackbone`); **MOTIF** (anchor cross-attention) and other baselines not implemented. Standard w6h presets use `motif_12b_d512`.
+- HPC training on H100: `jz_4xh100`, `jz_8xh100` — `dataloader.batch_size=4` (see [commands.md](../../commands.md)). Legacy: `configs/experiment/old/`.
+
 ## Key modules
 
 - Data: `src/motif/data/multi_source_dataset.py`, `source.py`, `collate_fn.py`

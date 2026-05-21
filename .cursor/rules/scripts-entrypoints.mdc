@@ -30,6 +30,6 @@ All use `@hydra.main(config_path="../configs", config_name=...)`.
 Example:
 
 ```bash
-python scripts/train.py experiment=det_pmw model=motif_12b_d512 setup=local \
+python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=local \
   paths=local dataloader.batch_size=2 wandb.name=debug +launch_without_submitit=true +wandb.mode=disabled
 ```

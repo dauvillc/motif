@@ -1,0 +1,36 @@
+# @package _global_
+defaults:
+  - override /sources: pmw_ir
+  - override /lightning_module: flow_matching
+  - override /lr_scheduler: cosine_warmup_100epochs
+  - override /metrics: none
+  - override /model: motif_12b_d512
+
+wandb:
+  name: fm_ssl_IM_w6h
+  group: fm_IM_w6h
+
+lightning_module:
+  patch_size: 4
+  mask_only_sources: ['pmw']
+
+model:
+  dropout: 0.0
+
+dataset:
+  train:
+    dt_min: -6.0
+    dt_max: 0.0
+    groups_availability:
+      # First criterion: include at least 2 pmw obs, one
+      # of which will be masked.
+      pmw:
+        sources: ['pmw']
+        availability: [2, 3]
+      # Second criterion: At most 3 infrared obs to limit GPU memory usage
+      ir:
+        sources: ['infrared']
+        availability: [0, 3]
+
+trainer:
+  strategy: ddp_find_unused_parameters_true
