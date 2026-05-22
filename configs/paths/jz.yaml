@@ -1,5 +1,10 @@
 # Path to where the unpreprocessed datasets are stored
 raw_datasets: ${oc.env:WORK}/data/motif/raw/
+# Derived raw dataset paths
+tc_primed: ${.raw_datasets}/tc_primed
+sar_cyclobs: ${.raw_datasets}/sar_cyclobs
+tc_primed_ifovs: ${.raw_datasets}/tc_primed_ifovs.yaml
+era5_weatherbench: ${.raw_datasets}/era5/1959-2023_01_10-6h-64x32_equiangular_conservative.zarr
 # Path to where the preprocessed dataset will be saved
 preprocessed_dataset: ${oc.env:SCRATCH}/data/motif/preprocessed/
 # Checkpoints directory

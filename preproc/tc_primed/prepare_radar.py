@@ -245,8 +245,8 @@ def main(cfg):
     cfg = OmegaConf.to_container(cfg, resolve=True)
 
     # Setup paths
-    tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
-    ifovs_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed_ifovs.yaml"
+    tc_primed_path = Path(cfg["paths"]["tc_primed"])
+    ifovs_path = Path(cfg["paths"]["tc_primed_ifovs"])
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
     # Rain rate criteria for radar pre-selection
     rain_rate_criteria = cfg["radar_rain_rate_criteria"]

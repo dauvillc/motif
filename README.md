@@ -50,9 +50,15 @@ uv sync
 from the repository root. The package can then be used by activating the virtual environment with `source .venv/bin/activate`, or by prefixing commands with `uv run`.
 
 ## Setting up the dataset
-The first step is to set the paths for your own environment by creating your own configuration in ```configs/paths/```, using ```configs/paths/example.yaml``` as base.
+The first step is to set the paths for your own environment by creating your own configuration in ```configs/paths/```, using ```configs/paths/example.yaml``` as base. Raw dataset locations are defined there as derived paths from ```raw_datasets``` (```tc_primed```, ```sar_cyclobs```, ```era5_weatherbench```, etc.).
 ## Downloading the dataset
-TC-PRIMED can then be downloaded using ```python preproc/tc_primed/download_tcprimed.py --dest <raw_datasets_dir>/tc_primed/ --workers <n_workers>``` where ```<raw_datasets_dir>``` is the entry set in the paths YAML config.
+Raw data can be downloaded with Hydra, passing ```paths=<your_paths_config>``` (defaults to ```jz``` via ```configs/preproc.yaml```):
+
+* TC-PRIMED: ```python preproc/tc_primed/download_tc_primed.py paths=<your_paths_config>```
+* SAR (CyclObs): ```python preproc/sar/download_sar_cyclobs.py paths=<your_paths_config>```
+* ERA5 WeatherBench2 Zarr: ```python preproc/era5/dl_era5_64x32.py paths=<your_paths_config>```
+
+Optional overrides include ```tc_primed_download.year=28```, ```tc_primed_download.basin=AL```, ```tc_primed_download.workers=32```, ```sar_download.workers=4```, and ```era5_download.workers=16```.
 ## Preprocessing
 The dataset can be preprocessing using the following scripts:
 * ```python preproc/tc_primed/prepare_pmw_concat.py paths=<your_paths_config> +num_workers=<n_workers>```

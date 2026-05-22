@@ -147,7 +147,7 @@ def main(cfg):
     cfg = OmegaConf.to_container(cfg, resolve=True)
 
     # Setup paths
-    sar_dir = Path(cfg["paths"]["raw_datasets"]) / "sar_cyclobs"
+    sar_dir = Path(cfg["paths"]["sar_cyclobs"])
     dest_dir = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared" / "sar_cband"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
