@@ -13,6 +13,7 @@ python preproc/tc_primed/download_tc_primed.py paths=jz tc_primed_download.worke
 """
 
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -24,11 +25,33 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 BUCKET_NAME = "noaa-nesdis-tcprimed-pds"
+# s3transfer may open several HTTP connections per large-object download (multipart).
+_TRANSFER_MAX_CONCURRENCY = 10
+_THREAD_LOCAL = threading.local()
+
+
+def _s3_client(max_pool_connections: int = _TRANSFER_MAX_CONCURRENCY):
+    """Anonymous S3 client."""
+    return boto3.client(
+        "s3",
+        config=Config(
+            signature_version=UNSIGNED,
+            max_pool_connections=max_pool_connections,
+        ),
+    )
+
+
+def _thread_s3_client():
+    """One client per worker thread — avoids sharing a pool across threads."""
+    client = getattr(_THREAD_LOCAL, "s3", None)
+    if client is None:
+        _THREAD_LOCAL.s3 = _s3_client()
+    return _THREAD_LOCAL.s3
 
 
 def list_keys(prefix: str):
     """Recursively list object keys under `prefix` in the public bucket."""
-    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    s3 = _s3_client()
     paginator = s3.get_paginator("list_objects_v2")
 
     for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix):
@@ -36,8 +59,9 @@ def list_keys(prefix: str):
             yield obj["Key"], obj["Size"]
 
 
-def download_one(s3, key: str, size: int, dest_root: str, pbar: tqdm, prefix: str):
+def download_one(key: str, size: int, dest_root: str, pbar: tqdm, prefix: str):
     """Download a single object unless it already exists locally at the same size."""
+    s3 = _thread_s3_client()
     local_path = os.path.join(dest_root, os.path.relpath(key, start=prefix))
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
@@ -76,7 +100,6 @@ def main(cfg):
 
     print(f"Downloading from s3://{BUCKET_NAME}/{prefix} to {dest_root}/")
 
-    s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     objects = list(list_keys(prefix))
     total_size = sum(size for _, size in objects)
 
@@ -87,7 +110,7 @@ def main(cfg):
     ) as pbar:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = [
-                pool.submit(download_one, s3_client, key, size, dest_root, pbar, prefix)
+                pool.submit(download_one, key, size, dest_root, pbar, prefix)
                 for key, size in objects
             ]
             for future in as_completed(futures):
