@@ -311,8 +311,8 @@ def main(raw_cfg):
     cfg = cast(Dict[str, Dict[str, Any]], cfg)  # For better type checking
 
     # Setup paths
-    tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
-    ifovs_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed_ifovs.yaml"
+    tc_primed_path = Path(cfg["paths"]["tc_primed"])
+    ifovs_path = Path(cfg["paths"]["tc_primed_ifovs"])
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
 
     # Retrieve configuration options

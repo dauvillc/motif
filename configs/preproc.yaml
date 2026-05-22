@@ -28,3 +28,18 @@ test_seasons: [2006, 2008, 2015, 2022, 2024]
 # Minimum time between two images from the same source over the same storm
 # This is to avoid having very similar images in the dataset
 min_time_between_same_source: 360  # in minutes
+
+# TC-PRIMED download (public S3)
+tc_primed_download:
+  year: null  # null = all years; int index (0 = 1987)
+  basin: null  # AL|EP|CP|WP|SH|IO; requires year
+  workers: 8
+
+# SAR CyclObs download
+sar_download:
+  workers: 4
+
+# ERA5 WeatherBench2 Zarr download
+era5_download:
+  workers: 8
+  gcs_uri: gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-64x32_equiangular_conservative.zarr

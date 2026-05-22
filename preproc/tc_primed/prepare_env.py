@@ -215,7 +215,7 @@ def main(cfg):
     include_seasons = cfg.get("include_seasons", None)
 
     # Setup paths
-    tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
+    tc_primed_path = Path(cfg["paths"]["tc_primed"])
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
     check_exist = cfg.get("check_exist", False)
 

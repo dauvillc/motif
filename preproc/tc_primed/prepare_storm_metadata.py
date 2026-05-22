@@ -162,7 +162,7 @@ def main(cfg):
     cfg = OmegaConf.to_container(cfg, resolve=True)
 
     # Setup paths
-    tc_primed_path = Path(cfg["paths"]["raw_datasets"]) / "tc_primed"
+    tc_primed_path = Path(cfg["paths"]["tc_primed"])
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
     check_exist = cfg.get("check_exist", False)
     # Option to process a single file
