@@ -2,7 +2,7 @@
 
 Bash job scripts for downloading raw data and building the preprocessed dataset on [Jean-Zay](https://www.idris.fr/jean-zay/).
 
-Paths default to `paths=jz` ([`configs/paths/jz.yaml`](../../configs/paths/jz.yaml)): raw data on `$WORK`, preprocessed output on `$SCRATCH`.
+Paths default to `paths=jz` ([`configs/paths/jz.yaml`](../../configs/paths/jz.yaml)): raw data and preprocessed output on `$SCRATCH` (repository stays on `$WORK`).
 
 ## Prerequisites
 
