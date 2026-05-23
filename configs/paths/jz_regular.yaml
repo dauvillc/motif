@@ -1,5 +1,5 @@
 # Path to where the unpreprocessed datasets are stored
-raw_datasets: ${oc.env:WORK}/data/motif/raw/
+raw_datasets: ${oc.env:SCRATCH}/data/motif/raw/
 # Derived raw dataset paths
 tc_primed: ${.raw_datasets}/tc_primed
 sar_cyclobs: ${.raw_datasets}/sar_cyclobs
