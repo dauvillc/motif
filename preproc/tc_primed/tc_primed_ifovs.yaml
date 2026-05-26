@@ -1,0 +1,159 @@
+# TC-PRIMED instantaneous field-of-view (IFOV) lookup table (version-controlled).
+# Source: TCPRIMED_v01r01_documentation.pdf (Table 3, pp. 26-27; sensor IFOV tables, pp. 27-30; radar, pp. 35-38).
+# Structure: SENSAT -> SWATH -> VAR -> [nadir_along, nadir_across, edge_along, edge_across] (km).
+# Only near-37 GHz and near-89 GHz PMW channels (plus radar IFOVs used by prepare_radar).
+
+_comment: Instantaneous field-of-view (IFOV) in km from TCPRIMED v01r01 documentation. Each value list is [nadir_along, nadir_across, edge_along, edge_across].
+_infrared_ifov_km:
+  ir_tcirar: 4.0
+  ir_hursat: 8.0
+
+AMSR2_GCOMW1:
+  S4:
+    TB_36.5H: [12.0, 7.0, 12.0, 7.0]
+    TB_36.5V: [12.0, 7.0, 12.0, 7.0]
+  S5:
+    TB_A89.0H: [5.0, 3.0, 5.0, 3.0]
+    TB_A89.0V: [5.0, 3.0, 5.0, 3.0]
+
+AMSRE_AQUA:
+  S4:
+    TB_36.5H: [14.4, 8.2, 14.4, 8.2]
+    TB_36.5V: [14.4, 8.2, 14.4, 8.2]
+  S5:
+    TB_A89.0H: [6.5, 3.7, 6.5, 3.7]
+    TB_A89.0V: [6.5, 3.7, 6.5, 3.7]
+
+GMI_GPM:
+  S1:
+    TB_36.64H: [15.6, 9.4, 15.6, 9.4]
+    TB_36.64V: [15.6, 9.4, 15.6, 9.4]
+    TB_89.0H: [7.2, 4.4, 7.2, 4.4]
+    TB_89.0V: [7.2, 4.4, 7.2, 4.4]
+  KuKaGMI:
+    nearSurfPrecipTotRate: [5.04, 5.04, 5.04, 5.57]
+    nearSurfPrecipTotRateSigma: [5.04, 5.04, 5.04, 5.57]
+    mainprecipitationType: [5.04, 5.04, 5.04, 5.57]
+  KuGMI:
+    nearSurfPrecipTotRate: [5.04, 5.04, 5.04, 5.57]
+    nearSurfPrecipTotRateSigma: [5.04, 5.04, 5.04, 5.57]
+    mainprecipitationType: [5.04, 5.04, 5.04, 5.57]
+
+GMI_GPM_post_boost:
+  S1:
+    TB_36.64H: [16.7, 10.0, 16.7, 10.0]
+    TB_36.64V: [16.7, 10.0, 16.7, 10.0]
+    TB_89.0H: [7.7, 4.6, 7.7, 4.6]
+    TB_89.0V: [7.7, 4.6, 7.7, 4.6]
+  KuKaGMI:
+    nearSurfPrecipTotRate: [5.48, 5.48, 5.48, 6.05]
+    nearSurfPrecipTotRateSigma: [5.48, 5.48, 5.48, 6.05]
+    mainprecipitationType: [5.48, 5.48, 5.48, 6.05]
+  KuGMI:
+    nearSurfPrecipTotRate: [5.48, 5.48, 5.48, 6.05]
+    nearSurfPrecipTotRateSigma: [5.48, 5.48, 5.48, 6.05]
+    mainprecipitationType: [5.48, 5.48, 5.48, 6.05]
+
+TMI_TRMM:
+  S2:
+    TB_37.0H: [18.3, 11.1, 18.3, 11.1]
+    TB_37.0V: [18.3, 11.1, 18.3, 11.1]
+  S3:
+    TB_85.5H: [7.8, 4.8, 7.8, 4.8]
+    TB_85.5V: [7.8, 4.8, 7.8, 4.8]
+  KuTMI:
+    nearSurfPrecipTotRate: [5.0, 5.0, 5.0, 5.0]
+    nearSurfPrecipTotRateSigma: [5.0, 5.0, 5.0, 5.0]
+    mainprecipitationType: [5.0, 5.0, 5.0, 5.0]
+
+TMI_TRMM_pre_boost:
+  S2:
+    TB_37.0H: [16.0, 9.7, 16.0, 9.7]
+    TB_37.0V: [16.0, 9.7, 16.0, 9.7]
+  S3:
+    TB_85.5H: [6.8, 4.2, 6.8, 4.2]
+    TB_85.5V: [6.8, 4.2, 6.8, 4.2]
+  KuTMI:
+    nearSurfPrecipTotRate: [4.3, 4.3, 4.3, 4.3]
+    nearSurfPrecipTotRateSigma: [4.3, 4.3, 4.3, 4.3]
+    mainprecipitationType: [4.3, 4.3, 4.3, 4.3]
+
+SSMI_F08:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMI_F10:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMI_F11:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMI_F13:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMI_F14:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMI_F15:
+  S1:
+    TB_37.0H: [37.0, 28.0, 37.0, 28.0]
+    TB_37.0V: [37.0, 28.0, 37.0, 28.0]
+  S2:
+    TB_85.5H: [15.0, 13.0, 15.0, 13.0]
+    TB_85.5V: [15.0, 13.0, 15.0, 13.0]
+
+SSMIS_F16:
+  S2:
+    TB_37.0H: [45.0, 28.5, 45.0, 28.5]
+    TB_37.0V: [45.0, 28.5, 45.0, 28.5]
+  S4:
+    TB_91.665H: [16.0, 13.0, 16.0, 13.0]
+    TB_91.665V: [16.0, 13.0, 16.0, 13.0]
+
+SSMIS_F17:
+  S2:
+    TB_37.0H: [45.0, 28.5, 45.0, 28.5]
+    TB_37.0V: [45.0, 28.5, 45.0, 28.5]
+  S4:
+    TB_91.665H: [16.0, 13.0, 16.0, 13.0]
+    TB_91.665V: [16.0, 13.0, 16.0, 13.0]
+
+SSMIS_F18:
+  S2:
+    TB_37.0H: [45.0, 28.5, 45.0, 28.5]
+    TB_37.0V: [45.0, 28.5, 45.0, 28.5]
+  S4:
+    TB_91.665H: [16.0, 13.0, 16.0, 13.0]
+    TB_91.665V: [16.0, 13.0, 16.0, 13.0]
+
+SSMIS_F19:
+  S2:
+    TB_37.0H: [45.0, 28.5, 45.0, 28.5]
+    TB_37.0V: [45.0, 28.5, 45.0, 28.5]
+  S4:
+    TB_91.665H: [16.0, 13.0, 16.0, 13.0]
+    TB_91.665V: [16.0, 13.0, 16.0, 13.0]

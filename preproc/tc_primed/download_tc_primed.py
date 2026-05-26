@@ -49,6 +49,16 @@ def _thread_s3_client():
     return _THREAD_LOCAL.s3
 
 
+def _local_relpath(key: str, prefix: str) -> str | None:
+    """Relative path under dest_root, or None for S3 prefix / folder placeholder keys."""
+    if key.endswith("/"):
+        return None
+    rel = os.path.relpath(key, start=prefix)
+    if rel in (".", "..") or rel.startswith("../"):
+        return None
+    return rel
+
+
 def list_keys(prefix: str):
     """Recursively list object keys under `prefix` in the public bucket."""
     s3 = _s3_client()
@@ -56,13 +66,20 @@ def list_keys(prefix: str):
 
     for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
-            yield obj["Key"], obj["Size"]
+            key = obj["Key"]
+            if _local_relpath(key, prefix) is None:
+                continue
+            yield key, obj["Size"]
 
 
 def download_one(key: str, size: int, dest_root: str, pbar: tqdm, prefix: str):
     """Download a single object unless it already exists locally at the same size."""
+    rel = _local_relpath(key, prefix)
+    if rel is None:
+        return
+
     s3 = _thread_s3_client()
-    local_path = os.path.join(dest_root, os.path.relpath(key, start=prefix))
+    local_path = os.path.join(dest_root, rel)
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
     if os.path.exists(local_path) and os.path.getsize(local_path) == size:
@@ -110,7 +127,7 @@ def main(cfg):
     ) as pbar:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = [
-                pool.submit(download_one, key, size, dest_root, pbar, prefix)
+                pool.submit(download_one, key, size, str(dest_root), pbar, prefix)
                 for key, size in objects
             ]
             for future in as_completed(futures):

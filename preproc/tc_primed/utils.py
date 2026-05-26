@@ -2,8 +2,22 @@
 
 from collections import defaultdict
 from itertools import chain
+from pathlib import Path
 
 import netCDF4 as nc
+import yaml
+
+TC_PRIMED_IFOVS_PATH = Path(__file__).resolve().parent / "tc_primed_ifovs.yaml"
+
+
+def load_tc_primed_ifovs() -> dict:
+    """Load the TC-PRIMED IFOV lookup table from the repository.
+
+    Expected structure: ``SENSAT[SWATH][VAR] -> [nadir_along, nadir_across, edge_along, edge_across]``.
+    """
+    with open(TC_PRIMED_IFOVS_PATH, "r") as f:
+        ifovs = yaml.safe_load(f)
+    return {key: value for key, value in ifovs.items() if not key.startswith("_")}
 
 
 def list_tc_primed_sources(tc_primed_path, include_seasons=None, source_type="all"):
