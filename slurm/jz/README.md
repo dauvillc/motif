@@ -8,7 +8,7 @@ Paths default to `paths=jz` ([`configs/paths/jz.yaml`](../../configs/paths/jz.ya
 
 - Repository cloned at `$WORK/motif` (override with `REPO_ROOT=...` if needed). Job scripts source `_common.sh` via this absolute path because SLURM copies scripts to `/var/spool/slurmd/...` (relative paths would break).
 - Submit jobs from the **repository root** so log paths resolve.
-- `tc_primed_ifovs.yaml` at `paths.tc_primed_ifovs` before `prepare_pmw_concat` (not downloaded by these scripts).
+- `preproc/tc_primed/tc_primed_ifovs.yaml` in the repository (used by `prepare_pmw_concat` and `prepare_radar`).
 - Python env: `module load pytorch-gpu/py3/2.8.0` (set in [`_common.sh`](_common.sh); no `uv`).
 
 ## Layout

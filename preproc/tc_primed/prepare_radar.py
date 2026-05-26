@@ -13,7 +13,6 @@ from pathlib import Path
 import hydra
 import pandas as pd
 import xarray as xr
-import yaml
 from global_land_mask import globe
 from netCDF4 import Dataset
 from omegaconf import OmegaConf
@@ -24,7 +23,7 @@ from motif.data.grid_functions import grid_distance_to_point
 from motif.data.resampling import ResamplingError, regrid
 
 # Local imports
-from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat
+from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat, load_tc_primed_ifovs
 
 # Dict {sensat: (swath, [variables])} defining the radar variables to extract
 SENSAT_VARIABLES = {
@@ -47,12 +46,12 @@ def preprocess_radar(ds):
     return ds
 
 
-def initialize_radar_metadata(sensat, ifovs_path, dest_dir):
+def initialize_radar_metadata(sensat, ifovs, dest_dir):
     """Retrieves the list of all data and
     characteristic variables of a source; and writes the source metadata file.
     Args:
         sensat (str): Sensor / Satellite pair (e.g. "PR_TRMM")
-        ifovs_path (Path): Path to the IFOVs YAML file.
+        ifovs (dict): IFOV lookup table (SENSAT -> SWATH -> VAR -> values).
         dest_dir (Path): Destination directory.
     Returns:
         bool: True if the metadata was successfully written, False otherwise.
@@ -71,24 +70,14 @@ def initialize_radar_metadata(sensat, ifovs_path, dest_dir):
         "storm_metadata_vars": storm_vars,
     }
 
-    # We'll now add to the source metadata the characteristic variables. For radar data,
-    # this will only be the IFOV as the sensors are equivalent otherwise.
-    # We'll get the IFOV values from the IFOV file (which needs to be
-    # manually filled based on the documentation).
     source_metadata["charac_vars"] = {}
-    with open(ifovs_path, "r") as f:
-        ifovs = yaml.safe_load(f)
-    # Check if the IFOV values are available for the instrument and swath.
     if sensat not in ifovs or swath not in ifovs[sensat]:
         print(f"IFOV values not found for {sensat}.")
         return False
-    ifov_values = ifovs[sensat][swath]
-    # Now, the IFOV values are either a list or a dict.
-    # - If a list, then the IFOV values are the same for all variables, so
-    # we'll just repeat the list for each variable.
-    if isinstance(ifov_values, list):
-        ifov_values = {var: ifov_values for var in data_vars}
-    # - If a dict, then the IFOV values are different for each variable.
+    ifov_by_var = ifovs[sensat][swath]
+    if not isinstance(ifov_by_var, dict):
+        print(f"IFOV for {sensat}/{swath} must be VAR -> [values]; got {type(ifov_by_var)}.")
+        return False
     ifov_var_names = [
         "IFOV_nadir_along_track",
         "IFOV_nadir_across_track",
@@ -96,7 +85,7 @@ def initialize_radar_metadata(sensat, ifovs_path, dest_dir):
         "IFOV_edge_across_track",
     ]
     for i, ifov_var in enumerate(ifov_var_names):
-        source_metadata["charac_vars"][ifov_var] = {var: ifov_values[var][i] for var in data_vars}
+        source_metadata["charac_vars"][ifov_var] = {var: ifov_by_var[var][i] for var in data_vars}
     with open(dest_dir / "source_metadata.json", "w") as f:
         json.dump(source_metadata, f)
     return True
@@ -246,7 +235,7 @@ def main(cfg):
 
     # Setup paths
     tc_primed_path = Path(cfg["paths"]["tc_primed"])
-    ifovs_path = Path(cfg["paths"]["tc_primed_ifovs"])
+    ifovs = load_tc_primed_ifovs()
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
     # Rain rate criteria for radar pre-selection
     rain_rate_criteria = cfg["radar_rain_rate_criteria"]
@@ -269,7 +258,7 @@ def main(cfg):
         # Create destination directory
         source_dest_dir.mkdir(parents=True, exist_ok=True)
 
-        if not initialize_radar_metadata(sensat, ifovs_path, source_dest_dir):
+        if not initialize_radar_metadata(sensat, ifovs, source_dest_dir):
             # Remove directory if metadata could not be initialized
             source_dest_dir.rmdir()
             print(f"Skipping {sensat}")

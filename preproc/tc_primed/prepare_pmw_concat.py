@@ -15,7 +15,6 @@ from typing import Any, Dict, cast
 import hydra
 import pandas as pd
 import xarray as xr
-import yaml
 from global_land_mask import globe
 from netCDF4 import Dataset
 from omegaconf import OmegaConf
@@ -27,7 +26,7 @@ from motif.data.grid_functions import grid_distance_to_point
 from motif.data.resampling import ResamplingError, regrid, regrid_to_grid
 
 # Local imports
-from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat
+from preproc.tc_primed.utils import list_tc_primed_overpass_files_by_sensat, load_tc_primed_ifovs
 
 # Dict of instrument -> {swath_containing_37GHz: [list_of_variables],
 #                             swath_containing_89GHz: [list_of_variables], ...}
@@ -99,7 +98,6 @@ def initialize_pmw_metadata(sensat: str, ifovs: dict, dest_dir: Path) -> bool:
     # 1) Frequency: we'll extract it from the variable names.
     frequencies = {var: parse_frequency(var) for var in data_vars}
     source_metadata["charac_vars"] = {"frequency": frequencies}
-    ifov_values = {}
     ifov_var_names = [
         "IFOV_nadir_along_track",
         "IFOV_nadir_across_track",
@@ -111,15 +109,13 @@ def initialize_pmw_metadata(sensat: str, ifovs: dict, dest_dir: Path) -> bool:
     for freq, (swath, vars) in SENSOR_VARIABLES[sensor].items():
         if swath not in ifovs[sensat]:
             raise ValueError(f"Swath {swath} not found in IFOV file for sensor {sensat}.")
-        ifov_values = ifovs[sensat][swath]
-        # For each swath, the IFOV values are either a list or a dict.
-        # - If a list, then the IFOV values are the same for all variables, so
-        # we'll just repeat the list for each variable.
-        if isinstance(ifov_values, list):
-            ifov_values = {var: ifov_values for var in vars}
-        # Now, ifov_values is always a dict {var_name: [ifov1, ifov2, ifov3, ifov4]}.
+        ifov_by_var = ifovs[sensat][swath]
+        if not isinstance(ifov_by_var, dict):
+            raise ValueError(
+                f"IFOV for {sensat}/{swath} must be VAR -> [values]; got {type(ifov_by_var)}."
+            )
         for i, ifov_var in enumerate(ifov_var_names):
-            source_metadata["charac_vars"][ifov_var] = {var: ifov_values[var][i] for var in vars}
+            source_metadata["charac_vars"][ifov_var] = {var: ifov_by_var[var][i] for var in vars}
     with open(dest_dir / "source_metadata.json", "w") as f:
         json.dump(source_metadata, f)
     return True
@@ -211,14 +207,7 @@ def process_pmw_file(
         if to_regular_grid:
             if ifovs is None:
                 raise ValueError("ifovs must be provided if to_regular_grid is True.")
-            # Get the IFOV values for the 89GHz swath (as nadir along and across track)
-            ifovs_89 = ifovs[sensat][swath_89]
-            # ifovs_89 is either a list [nadir_along, nadir_across, edge_along, edge_across]
-            # or a dict {var_name: [nadir_along, nadir_across, edge_along, edge_across]}.
-            if isinstance(ifovs_89, dict):
-                # We'll just take the IFOVs of the first variable
-                first_var = data_vars_89[0]
-                ifovs_89 = ifovs_89[first_var]
+            ifovs_89 = ifovs[sensat][swath_89][data_vars_89[0]]
             # Estimate regridding resolution as the min IFOV (in km)
             regridding_res = min(ifovs_89)
 
@@ -312,7 +301,6 @@ def main(raw_cfg):
 
     # Setup paths
     tc_primed_path = Path(cfg["paths"]["tc_primed"])
-    ifovs_path = Path(cfg["paths"]["tc_primed_ifovs"])
     dest_path = Path(cfg["paths"]["preprocessed_dataset"]) / "prepared"
 
     # Retrieve configuration options
@@ -327,9 +315,7 @@ def main(raw_cfg):
     num_workers = cast(int, cfg.get("num_workers", 1))
     chunksize = cast(int, cfg.get("chunksize", 64))
 
-    # Read the IFOV values file
-    with open(ifovs_path, "r") as f:
-        ifovs = yaml.safe_load(f)
+    ifovs = load_tc_primed_ifovs()
 
     # Retrieve all TC-PRIMED overpass files as a dict {sen_sat: <file_list>}
     pmw_files = list_tc_primed_overpass_files_by_sensat(tc_primed_path, include_seasons)
