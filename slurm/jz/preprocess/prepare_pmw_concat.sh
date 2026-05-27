@@ -16,4 +16,5 @@ source "${REPO_ROOT}/slurm/jz/_common.sh"
 
 python preproc/tc_primed/prepare_pmw_concat.py \
   paths="${PATHS}" \
-  "+num_workers=${NUM_WORKERS}"
+  +check_older="3h" \
+  +num_workers=${NUM_WORKERS}
