@@ -74,7 +74,7 @@ Required overrides (groups marked `???` in defaults): `paths`, `sources`, `model
 ```bash
 # Local debug (no SLURM)
 python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=local \
-  paths=local dataloader.batch_size=2 wandb.name=debug +launch_without_submitit=true
+  paths=local dataloader.batch_size=2 wandb.name=debug +run_local=true
 
 # Cluster H100 (Submitit → SLURM) — SSL microwave+infrared
 python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512 setup=jz_8xh100 \
@@ -116,7 +116,7 @@ Eval classes in `configs/eval_class/` must subclass [AbstractEvaluationMetric](s
 
 From `.vscode/launch.json` patterns:
 
-- `+launch_without_submitit=true` — train without Submitit
+- `+run_local=true` — train without Submitit
 - `+wandb.mode=disabled` — no W&B during debug
 - `+dataset.train.limit_samples=N` / `+dataset.val.limit_samples=N` — smoke tests
 - `dataloader.num_workers=0` and `dataloader.persistent_workers=false` — easier debugging

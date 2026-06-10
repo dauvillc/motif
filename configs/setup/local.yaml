@@ -2,7 +2,7 @@
 defaults:
   - override /paths: local
 
-launch_without_submitit: true
+run_local: true
 
 trainer:  
   devices: 1

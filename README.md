@@ -70,7 +70,7 @@ The dataset can be preprocessing using the following scripts:
 Similarly to the paths configuration, the first step is to create a configuration in ```configs/setup/``` adapted to your computing environment, using ```configs/setup/exampe.yaml``` as base.
 
 A training experiment can be run locally using
-```python scripts/train.py experiment=<experiment_cfg> model=motif_12b_d512 setup=<your_setup_cfg> dataloader.batch_size=2 wandb.name=<name_of_the_experiment> +launch_without_submitit=true```
+```python scripts/train.py experiment=<experiment_cfg> model=motif_12b_d512 setup=<your_setup_cfg> dataloader.batch_size=2 wandb.name=<name_of_the_experiment> +run_local=true```
 On a SLURM cluster, the training can be directly submitted as a job using
 ```python scripts/train.py experiment=<experiment_cfg> model=motif_12b_d512 setup=<your_setup_cfg> dataloader.batch_size=2 wandb.name=<name_of_the_experiment>```
 The following experiment configurations are available in `configs/experiment/` (6-hour training window, flow matching):

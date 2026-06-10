@@ -28,4 +28,4 @@ _convert_: partial
 ## Overrides
 
 - Add new keys with `+key=value`; change existing with `key=value`.
-- Local SLURM bypass: `+launch_without_submitit=true`.
+- Local SLURM bypass: `+run_local=true`.

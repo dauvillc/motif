@@ -109,5 +109,5 @@ python scripts/eval.py models="{Deterministic__Self-supervised__Microwave+Infrar
 ```bash
 python scripts/eval.py models="{Supervised_Microwave_only: [0y7cjuuv, gpm_PI_dt6], Self-supervised__Microwave_only: [frlwvx27-3, gpm_PI_dt6], Self-supervised__Microwave+Infrared: [4yspbbv7-4, gpm_PI_dt6]}" eval_class="[footprint_map, visual]" +eval_name=gpm_dt6_footprints setup=jz_cpu_visu num_workers=39 split=test checks_strictness=targets_only +eval_class.inline_visual.sample_index=17 eval_class.footprint_map.sample_index=17
 
-python scripts/eval.py models="{Deterministic: [k2s7ctuk, gpm_PI_dt6], Flow_matching: [4yspbbv7-4, gpm_PI_dt6]}" eval_class="[visual, footprint_map]" +eval_name=gpm_PI_dt6_fm_vs_det setup=jz_cpu num_workers=39 split=test +launch_without_submitit=true +eval_class.inline_visual.sample_index=63 eval_class.footprint_map.sample_index=63
+python scripts/eval.py models="{Deterministic: [k2s7ctuk, gpm_PI_dt6], Flow_matching: [4yspbbv7-4, gpm_PI_dt6]}" eval_class="[visual, footprint_map]" +eval_name=gpm_PI_dt6_fm_vs_det setup=jz_cpu num_workers=39 split=test +run_local=true +eval_class.inline_visual.sample_index=63 eval_class.footprint_map.sample_index=63
 ```

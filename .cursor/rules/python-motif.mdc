@@ -21,6 +21,6 @@ alwaysApply: false
 
 ## Local debug
 
-- `+wandb.mode=disabled`, `+launch_without_submitit=true`
+- `+wandb.mode=disabled`, `+run_local=true`
 - `+dataset.train.limit_samples=N` for smoke tests
 - `dataloader.num_workers=0` when debugging DataLoader issues

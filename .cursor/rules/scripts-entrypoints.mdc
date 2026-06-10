@@ -11,7 +11,7 @@ All use `@hydra.main(config_path="../configs", config_name=...)`.
 ## train.py
 
 - Config: `configs/train.yaml`
-- Submitit/SLURM by default; local: `+launch_without_submitit=true`
+- Submitit/SLURM by default; local: `+run_local=true`
 - Resume: `+resume_run_id=<id>`, `+resume_mode=resume|fine_tune`
 - Checkpoints under `paths.checkpoints/<run_id>`
 
@@ -31,5 +31,5 @@ Example:
 
 ```bash
 python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=local \
-  paths=local dataloader.batch_size=2 wandb.name=debug +launch_without_submitit=true +wandb.mode=disabled
+  paths=local dataloader.batch_size=2 wandb.name=debug +run_local=true +wandb.mode=disabled
 ```

@@ -196,7 +196,7 @@ def main(raw_cfg: DictConfig):
     # Create the job object and submit it to the auto executor.
     job = EvalJob(cfg)
 
-    if cfg.get("launch_without_submitit", False):
+    if cfg.get("run_local", False):
         return job()
     else:
         executor = _make_executor(cfg)
