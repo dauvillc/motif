@@ -29,12 +29,6 @@ test_seasons: [2008, 2022, 2023, 2024, 2025]
 # This is to avoid having very similar images in the dataset
 min_time_between_same_source: 360  # in minutes
 
-# TC-PRIMED download (public S3)
-tc_primed_download:
-  year: null  # null = all years; int index (0 = 1987)
-  basin: null  # AL|EP|CP|WP|SH|IO; requires year
-  workers: 8
-
 # SAR CyclObs download
 sar_download:
   workers: 4

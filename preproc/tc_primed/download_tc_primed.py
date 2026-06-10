@@ -4,18 +4,18 @@ Bulk-download files from the NOAA TC-PRIMED public S3 bucket.
 
 Examples
 ========
-# All 2015 Atlantic storms (year index 28: 1987 + 28 = 2015)
-python preproc/tc_primed/download_tc_primed.py paths=jz \
-    tc_primed_download.year=28 tc_primed_download.basin=AL
+# All 2015 Atlantic storms
+python preproc/tc_primed/download_tc_primed.py paths=jz +year=2015 +basin=AL
 
 # Everything in v01r01/final (~1.6 TB)
-python preproc/tc_primed/download_tc_primed.py paths=jz tc_primed_download.workers=32
+python preproc/tc_primed/download_tc_primed.py paths=local +workers=32
 """
 
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any, cast
 
 import boto3
 import hydra
@@ -95,19 +95,18 @@ def download_one(key: str, size: int, dest_root: str, pbar: tqdm, prefix: str):
 @hydra.main(config_path="../../configs/", config_name="preproc", version_base=None)
 def main(cfg):
     cfg = OmegaConf.to_container(cfg, resolve=True)
-    download_cfg = cfg["tc_primed_download"]
-    year = download_cfg["year"]
-    basin = download_cfg["basin"]
-    workers = download_cfg["workers"]
+    cfg = cast(dict[str, Any], cfg)
+    year = cfg.get("year")
+    basin = cfg.get("basin")
+    workers = cast(int, cfg.get("workers", 8))
 
     if basin is not None and year is None:
-        raise ValueError("tc_primed_download.basin requires tc_primed_download.year to be set.")
+        raise ValueError("+basin requires +year to be set (calendar year, e.g. +year=2015).")
 
     dest_base = Path(cfg["paths"]["tc_primed"])
     if year is not None:
-        absolute_year = 1987 + year
-        prefix = f"v01r01/final/{absolute_year}/"
-        dest_root = dest_base / str(absolute_year)
+        prefix = f"v01r01/final/{year}/"
+        dest_root = dest_base / str(year)
     else:
         prefix = "v01r01/final/"
         dest_root = dest_base
