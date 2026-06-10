@@ -1,4 +1,4 @@
-"""Self-attention computed over each source independently using swin attention."""
+"""Self-attention computed over each source independently using full attention."""
 
 import torch
 import torch.nn as nn

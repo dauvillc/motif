@@ -1,4 +1,5 @@
-"""Implements a multi-source MoTiF backbone."""
+"""Implements a multi-source MoTiFGen backbone using full attention
+instead of swin attention in the self-attention modules."""
 
 from functools import partial
 from typing import Callable, cast

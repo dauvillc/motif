@@ -1,4 +1,5 @@
-"""Self-attention computed over each source independently using swin attention."""
+"""Self-attention computed over each source independently using swin attention,
+with flash attention for memory efficiency."""
 
 import numpy as np
 import torch

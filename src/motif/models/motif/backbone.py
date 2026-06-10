@@ -1,4 +1,4 @@
-"""Implements a multi-source MoTiF backbone."""
+"""Implements a multi-source MoTiFGen backbone."""
 
 from functools import partial
 from typing import Callable, cast
