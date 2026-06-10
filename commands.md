@@ -2,7 +2,7 @@
 
 Flow-matching experiments with a 6-hour time window (`w6h`). Names encode the data regime: `M` = microwave only (self-supervised), `I` = infrared only (self-supervised), `MI` = microwave + infrared (self-supervised), `sup` = supervised baseline (GMI as the only masked target). Legacy presets live in `configs/experiment/old/`.
 
-All `fm_ssl_*` and `fm_sup_*` presets use `model=motif_12b_d512`. **MOTIFGen** (`MultisourceGeneralBackbone` in `src/motif/models/motif/backbone.py`), **MOTIF** (anchor-point cross-attention), and other IM architectural baselines are planned and will use a dedicated model config when implemented — not part of the standard w6h commands below.
+All `fm_ssl_*` and `fm_sup_*` presets default to **MOTIFGen** (`model=motif_12b_d512`, `MultisourceGeneralBackbone` in `src/motif/models/motif/backbone.py`). Alternate backbones are available via `model=…` — see [IM architectural variants](#im-architectural-variants) below.
 
 All commands below use H100 setups on JZ (`paths=jz`) with `dataloader.batch_size=4`. Adjust if needed.
 
@@ -35,15 +35,29 @@ python scripts/train.py experiment=fm_sup_IM_w6h model=motif_12b_d512 setup=jz_8
   dataloader.batch_size=4 wandb.name=fm_sup_IM_w6h
 ```
 
-## IM architectural variants (planned)
+## IM architectural variants
 
-Future comparisons on `fm_ssl_IM_w6h` may swap in alternate backbones via `model=…`; standard w6h runs use `motif_12b_d512` only.
+Comparisons on `fm_ssl_IM_w6h` (or any w6h preset) swap in alternate backbones via `model=…`. All variants share the same 12-block / `d512` hyperparameters; only the backbone class differs.
 
-| Variant | Status | Notes |
-|---------|--------|-------|
-| MOTIFGen (`MultisourceGeneralBackbone`) | planned | dedicated model config when implemented |
-| MOTIF (anchor-point cross-attention) | not implemented | — |
-| Other baselines | not implemented | — |
+| Variant | Model config | Backbone |
+|---------|--------------|----------|
+| **MOTIFGen** (default) | `motif_12b_d512` | `MultisourceGeneralBackbone` |
+| **MOTIF** (anchor cross-attention) | `motif_12b_d512_anchor` | `MultisourceAnchorBackbone` |
+| **Transformer** | `transformer_12b_d512` | `TransformerBackbone` |
+
+### MOTIF (anchor cross-attention)
+
+```bash
+python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512_anchor setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h_motif_anchor
+```
+
+### Transformer
+
+```bash
+python scripts/train.py experiment=fm_ssl_IM_w6h model=transformer_12b_d512 setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h_transformer
+```
 
 # Make predictions
 
