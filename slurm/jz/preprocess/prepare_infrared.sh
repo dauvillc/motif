@@ -16,4 +16,5 @@ source "${REPO_ROOT}/slurm/jz/_common.sh"
 
 python preproc/tc_primed/prepare_infrared.py \
   paths="${PATHS}" \
-  "+num_workers=${NUM_WORKERS}"
+  "+num_workers=${NUM_WORKERS}" \
+  "+check_exist=true"

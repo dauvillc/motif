@@ -5,6 +5,7 @@ Prepares the infrared data for the TC Primed dataset.
 """
 
 import json
+import traceback
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -156,14 +157,18 @@ def process_ir_file(
 
 def process_chunk(file_list, dest_dirs, check_exist, verbose=False):
     """Processes a chunk of infrared files."""
-    local_metadata, tcirar_or_hursat = [], []
+    local_metadata, tcirar_or_hursat, errors = [], [], []
     iterator = tqdm(file_list, desc="Processing chunk") if verbose else file_list
     for file in iterator:
-        meta, src = process_ir_file(file, dest_dirs, check_exist)
+        try:
+            meta, src = process_ir_file(file, dest_dirs, check_exist)
+        except Exception:
+            errors.append(f"Failed to preprocess {file}:\n{traceback.format_exc()}")
+            continue
         if meta is not None:
             local_metadata.append(meta)
             tcirar_or_hursat.append(src)
-    return local_metadata, tcirar_or_hursat
+    return local_metadata, tcirar_or_hursat, errors
 
 
 @hydra.main(config_path="../../configs/", config_name="preproc", version_base=None)
@@ -220,12 +225,22 @@ def main(cfg):
                     )
                 )
             for future in as_completed(futures):
-                meta_chunk, tcirar_or_hursat = future.result()
-                for sample_metadata, src in zip(meta_chunk, tcirar_or_hursat):
+                try:
+                    meta_chunk, srcs, errors = future.result()
+                except Exception:
+                    print(f"Worker process crashed:\n{traceback.format_exc()}", flush=True)
+                    continue
+                for err in errors:
+                    print(err, flush=True)
+                for sample_metadata, src in zip(meta_chunk, srcs):
                     samples_metadata[src].append(sample_metadata)
     else:
         for file in tqdm(ir_files, desc="Processing files"):
-            sample_metadata, tcirar_or_hursat = process_ir_file(file, dest_dirs, check_exist)
+            try:
+                sample_metadata, tcirar_or_hursat = process_ir_file(file, dest_dirs, check_exist)
+            except Exception as exc:
+                warnings.warn(f"Failed to preprocess infrared file {file}: {exc}. Discarding sample.")
+                continue
             if sample_metadata is not None:
                 samples_metadata[tcirar_or_hursat].append(sample_metadata)
 
