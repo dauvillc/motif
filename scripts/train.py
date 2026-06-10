@@ -204,6 +204,14 @@ def main(raw_cfg: DictConfig):
     OmegaConf.register_new_resolver("nan", lambda: float("nan"))
     cfg = cast(dict[str, Any], OmegaConf.to_object(raw_cfg))
 
+    # Linear LR scaling rule: scale by gradient accumulation factor so that
+    # effective_lr = base_lr * accumulate_grad_batches.
+    grad_accum = cfg.get("trainer", {}).get("accumulate_grad_batches", 1)
+    if grad_accum > 1:
+        cfg["lr_scheduler"]["max_lr"] *= grad_accum
+        cfg["lr_scheduler"]["min_lr"] *= grad_accum
+        print(f"Gradient accumulation: {grad_accum}× — scaled max_lr to {cfg['lr_scheduler']['max_lr']:.2e}")
+
     # Create the job object and submit it to the auto executor.
     job = TrainJob(cfg)
 

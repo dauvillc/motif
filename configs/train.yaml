@@ -7,7 +7,7 @@ defaults:
   - dataloader: default
   - lightning_module: flow_matching
   - model: ???
-  - trainer: default
+  - trainer: grad_accum_8
   - lr_scheduler: cosine_warmup_50epochs
   - optimizer: default_adamw
   - metrics: none
