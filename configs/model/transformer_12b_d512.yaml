@@ -1,0 +1,17 @@
+dropout: 0.0
+dim: 512
+cond_dim: 256
+coords_encoding_method: "fourier"
+coords_dim: 256
+backbone:
+  _target_: motif.models.transformer.backbone.TransformerBackbone
+  n_blocks: 12
+  dim: ${model.dim}
+  att_inner_dim: ${model.dim}
+  positional_encoding: "rpb"
+  coords_dim: ${model.coords_dim}
+  coords_inner_dim: ${model.coords_dim}
+  cond_dim: ${model.cond_dim}
+  num_heads: 8
+  mlp_inner_ratio: 2.0
+  dropout: ${model.dropout}

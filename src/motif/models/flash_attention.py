@@ -15,9 +15,9 @@ class SpatiotemporalFlashAttention(nn.Module):
     More precisely, given feature queries and keys $(Qf, Kf)$ and coordinate queries and keys
     $(Qc, Kc)$, computes
 
-    $$A = Softmax(Qf @ Kf^T / sqrt(Df) + \alpha * Qc @ Kc^T / sqrt(Dc))$$
+    $$A = Softmax(Qf @ Kf^T / sqrt(Df) + \\alpha * Qc @ Kc^T / sqrt(Dc))$$
 
-    where $\alpha$ is a learned parameter which only varies across heads, and $Df$ and $Dc$ are
+    where $\\alpha$ is a learned parameter which only varies across heads, and $Df$ and $Dc$ are
     the feature and coordinate embedding dimensions, respectively.
 
     Uses torch.scaled_dot_product_attention for efficient attention computation.

@@ -5,7 +5,7 @@ import torch.nn as nn
 from einops import rearrange
 
 from motif.datatypes import MultisourceTensor, SourceEmbeddingDict
-from motif.models.motif.flash_attention import SpatiotemporalFlashAttention
+from motif.models.flash_attention import SpatiotemporalFlashAttention
 from motif.models.motif.rope_attention import SpatiotemporalRoPEAttention
 from motif.models.motif.small_layers import RMSNorm
 
