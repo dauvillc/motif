@@ -11,19 +11,19 @@ All commands below use H100 setups on JZ (`paths=jz`) with `dataloader.batch_siz
 ### Microwave only (`fm_ssl_M_w6h`)
 ```bash
 python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=jz_4xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_ssl_M_w6h
+  dataloader.batch_size=2 wandb.name=fm_ssl_M_w6h
 ```
 
 ### Infrared only (`fm_ssl_I_w6h`)
 ```bash
 python scripts/train.py experiment=fm_ssl_I_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_ssl_I_w6h
+  dataloader.batch_size=2 wandb.name=fm_ssl_I_w6h
 ```
 
 ### Microwave + Infrared (`fm_ssl_IM_w6h`)
 ```bash
 python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h
+  dataloader.batch_size=2 wandb.name=fm_ssl_IM_w6h
 ```
 
 ## Supervised baseline: GMI target (`fm_sup_IM_w6h`)
@@ -32,7 +32,7 @@ Microwave + infrared as input; only GMI/GPM is masked and reconstructed.
 
 ```bash
 python scripts/train.py experiment=fm_sup_IM_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_sup_IM_w6h
+  dataloader.batch_size=2 wandb.name=fm_sup_IM_w6h
 ```
 
 ## IM architectural variants
