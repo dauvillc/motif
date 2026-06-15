@@ -6,11 +6,10 @@ Multi-source spatiotemporal interpolation for tropical cyclones (PyTorch 2.8, Li
 
 Primary comparisons (configs in `configs/experiment/`, HPC recipes in [commands.md](commands.md)):
 
-1. **Source modality (SSL)**: microwave-only **M** (`fm_ssl_M_w6h`), infrared-only **I** (`fm_ssl_I_w6h`), microwave+infrared **MI** (`fm_ssl_IM_w6h`) — all self-supervised, 6h training window.
-2. **Supervised baseline**: **sup** (`fm_sup_IM_w6h`) — GMI-only target on the MI source setup.
-3. **Architecture on MI** (planned): **MOTIFGen** (`MultisourceGeneralBackbone` in `src/motif/models/motif/backbone.py`); original **MOTIF** with anchor cross-attention and other baselines are **not implemented yet**. Standard `fm_ssl_*` / `fm_sup_*` commands use `model=motif_12b_d512`; alternate backbones will use a dedicated model config when added.
-
-Legacy presets (`det_gpm`, `fm_pmw`, `fm_PI`, …) live under `configs/experiment/old/`.
+1. **Deterministic self-supervised PI** (`det_PI`): PMW + infrared; PMW masked, reconstructed with MSE.
+2. **FM supervised GPM** (`fm_PI_gpm`): PMW + infrared; GMI/GPM masked, reconstructed via flow matching.
+3. **FM self-supervised PMW** (`fm_pmw`): PMW 37/89 GHz only; self-supervised flow matching.
+4. **FM self-supervised PI** (`fm_PI`): PMW + infrared; PMW masked, reconstructed via flow matching.
 
 ## Environment
 
@@ -73,19 +72,19 @@ Required overrides (groups marked `???` in defaults): `paths`, `sources`, `model
 
 ```bash
 # Local debug (no SLURM)
-python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=local \
+python scripts/train.py experiment=fm_PI model=motif_12b_d512 setup=local \
   paths=local dataloader.batch_size=2 wandb.name=debug +run_local=true
 
-# Cluster H100 (Submitit → SLURM) — SSL microwave+infrared
-python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512 setup=jz_8xh100 \
-  paths=jz dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h
+# Cluster H100 (Submitit → SLURM) — FM self-supervised PI
+python scripts/train.py experiment=fm_PI model=motif_12b_d512 setup=jz_8xh100 \
+  paths=jz dataloader.batch_size=2 wandb.name=fm_PI
 ```
 
 - **Resume**: `+resume_run_id=<id>` and optional `+resume_mode=fine_tune` (default `resume`). Checkpoints: [checkpoints.py](src/motif/utils/checkpoints.py); optional `reset_output_layers`.
 - **W&B**: offline by default ([configs/wandb/default.yaml](configs/wandb/default.yaml)); disable locally with `+wandb.mode=disabled`.
 - **Artifacts**: checkpoints → `paths.checkpoints/<run_id>`; validation figures → `paths.validation`.
 
-Experiment presets: `fm_ssl_M_w6h`, `fm_ssl_I_w6h`, `fm_ssl_IM_w6h`, `fm_sup_IM_w6h` (see [commands.md](commands.md)). H100 setups: `jz_h100` (1 GPU), `jz_4xh100`, `jz_8xh100`, `jz_16xh100` (`slurm_constraint: h100`) — use `dataloader.batch_size=4`. Legacy presets in `configs/experiment/old/`.
+Experiment presets: `det_PI`, `fm_PI_gpm`, `fm_pmw`, `fm_PI` (see [commands.md](commands.md)). H100 setups: `jz_h100` (1 GPU), `jz_4xh100`, `jz_8xh100`, `jz_16xh100` (`slurm_constraint: h100`) — use `dataloader.batch_size=2`.
 
 ### Predictions — `scripts/make_predictions.py`
 

@@ -15,9 +15,9 @@ The framework is built with [PyTorch](https://pytorch.org/) and [Lightning](http
   * Compute the loss between the masked source's original values and the reconstructed values.
 One of the modules is deterministic (trained with the MSE as loss function), while the other is generative using flow matching.
 * Active research program (see [CLAUDE.md](CLAUDE.md), [commands.md](commands.md)):
-  * Compare self-supervised **M** (microwave), **I** (infrared), and **IM** (both) regimes;
-  * Supervised GMI-only baseline on the IM setup (`fm_sup_IM_w6h`);
-  * On IM, planned architectural comparisons: **MOTIFGen** (`MultisourceGeneralBackbone`) vs original **MOTIF** (anchor cross-attention) and other baselines — standard experiments use `motif_12b_d512`.
+  * Deterministic self-supervised PI (`det_PI`);
+  * FM supervised GPM (`fm_PI_gpm`);
+  * FM self-supervised PMW (`fm_pmw`) and PI (`fm_PI`).
 * Training modes: self-supervised (random mask per sample) or supervised (fixed mask target; optional freeze/reset of layers).
 
 # Repository organization
@@ -73,14 +73,14 @@ A training experiment can be run locally using
 ```python scripts/train.py experiment=<experiment_cfg> model=motif_12b_d512 setup=<your_setup_cfg> dataloader.batch_size=2 wandb.name=<name_of_the_experiment> +run_local=true```
 On a SLURM cluster, the training can be directly submitted as a job using
 ```python scripts/train.py experiment=<experiment_cfg> model=motif_12b_d512 setup=<your_setup_cfg> dataloader.batch_size=2 wandb.name=<name_of_the_experiment>```
-The following experiment configurations are available in `configs/experiment/` (6-hour training window, flow matching):
+The following experiment configurations are available in `configs/experiment/`:
 
-* ```fm_ssl_M_w6h```: Self-supervised, microwave only.
-* ```fm_ssl_I_w6h```: Self-supervised, infrared only (GMI masked).
-* ```fm_ssl_IM_w6h```: Self-supervised, microwave + infrared.
-* ```fm_sup_IM_w6h```: Supervised baseline, GMI target on the MI source setup.
+* `det_PI`: Deterministic, self-supervised, microwave + infrared.
+* `fm_PI_gpm`: Flow matching, supervised, GMI/GPM target on the PI setup.
+* `fm_pmw`: Flow matching, self-supervised, microwave 37/89 GHz only.
+* `fm_PI`: Flow matching, self-supervised, microwave + infrared.
 
-Legacy presets (`det_gpm`, `fm_pmw`, `fm_PI`, …) are in `configs/experiment/old/`. HPC command recipes: [commands.md](commands.md).
+HPC command recipes: [commands.md](commands.md).
 
 Every training run generates a run id that is printed out by the script. That run id is used as Weights and Biases id.
 

@@ -1,62 +1,41 @@
 # Training
 
-Flow-matching experiments with a 6-hour time window (`w6h`). Names encode the data regime: `M` = microwave only (self-supervised), `I` = infrared only (self-supervised), `MI` = microwave + infrared (self-supervised), `sup` = supervised baseline (GMI as the only masked target). Legacy presets live in `configs/experiment/old/`.
+All commands below use H100 setups on JZ (`paths=jz`) with `dataloader.batch_size=2`.
 
-All `fm_ssl_*` and `fm_sup_*` presets default to **MOTIFGen** (`model=motif_12b_d512`, `MultisourceGeneralBackbone` in `src/motif/models/motif/backbone.py`). Alternate backbones are available via `model=…` — see [IM architectural variants](#im-architectural-variants) below.
+## Deterministic self-supervised PI (`det_PI`)
 
-All commands below use H100 setups on JZ (`paths=jz`) with `dataloader.batch_size=4`. Adjust if needed.
+PMW + infrared sources; PMW is masked and reconstructed deterministically (MSE).
 
-## Self-supervised: M vs I vs MI
-
-### Microwave only (`fm_ssl_M_w6h`)
 ```bash
-python scripts/train.py experiment=fm_ssl_M_w6h model=motif_12b_d512 setup=jz_4xh100 paths=jz \
-  dataloader.batch_size=2 wandb.name=fm_ssl_M_w6h
+python scripts/train.py experiment=det_PI model=motif_12b_d512 setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=2 wandb.name=det_PI
 ```
 
-### Infrared only (`fm_ssl_I_w6h`)
+## Flow matching supervised GPM (`fm_PI_gpm`)
+
+PMW + infrared sources; only GMI/GPM is masked and reconstructed via flow matching.
+
 ```bash
-python scripts/train.py experiment=fm_ssl_I_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=2 wandb.name=fm_ssl_I_w6h
+python scripts/train.py experiment=fm_PI_gpm model=motif_12b_d512 setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=2 wandb.name=fm_PI_gpm
 ```
 
-### Microwave + Infrared (`fm_ssl_IM_w6h`)
+## Flow matching self-supervised PMW (`fm_pmw`)
+
+PMW 37/89 GHz channels only; self-supervised masking via flow matching.
+
 ```bash
-python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=2 wandb.name=fm_ssl_IM_w6h
+python scripts/train.py experiment=fm_pmw model=motif_12b_d512 setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=2 wandb.name=fm_pmw
 ```
 
-## Supervised baseline: GMI target (`fm_sup_IM_w6h`)
+## Flow matching self-supervised PI (`fm_PI`)
 
-Microwave + infrared as input; only GMI/GPM is masked and reconstructed.
-
-```bash
-python scripts/train.py experiment=fm_sup_IM_w6h model=motif_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=2 wandb.name=fm_sup_IM_w6h
-```
-
-## IM architectural variants
-
-Comparisons on `fm_ssl_IM_w6h` (or any w6h preset) swap in alternate backbones via `model=…`. All variants share the same 12-block / `d512` hyperparameters; only the backbone class differs.
-
-| Variant | Model config | Backbone |
-|---------|--------------|----------|
-| **MOTIFGen** (default) | `motif_12b_d512` | `MultisourceGeneralBackbone` |
-| **MOTIF** (anchor cross-attention) | `motif_12b_d512_anchor` | `MultisourceAnchorBackbone` |
-| **Transformer** | `transformer_12b_d512` | `TransformerBackbone` |
-
-### MOTIF (anchor cross-attention)
+PMW + infrared sources; PMW is masked and reconstructed via flow matching.
 
 ```bash
-python scripts/train.py experiment=fm_ssl_IM_w6h model=motif_12b_d512_anchor setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h_motif_anchor
-```
-
-### Transformer
-
-```bash
-python scripts/train.py experiment=fm_ssl_IM_w6h model=transformer_12b_d512 setup=jz_8xh100 paths=jz \
-  dataloader.batch_size=4 wandb.name=fm_ssl_IM_w6h_transformer
+python scripts/train.py experiment=fm_PI model=motif_12b_d512 setup=jz_8xh100 paths=jz \
+  dataloader.batch_size=2 wandb.name=fm_PI
 ```
 
 # Make predictions
