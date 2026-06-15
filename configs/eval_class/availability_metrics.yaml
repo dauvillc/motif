@@ -1,0 +1,18 @@
+availability_metrics:
+  _target_: motif.eval.availability_metrics.AvailabilityMetricsEvaluation
+  dt_bin_width: 0.5  # hours; signed-dt bin width (30 min)
+  source_name_replacements: [
+    ["tc_primed_pmw_", ""],
+    ["_", " "]
+  ]
+  channel_replacements: [
+    ["TB_", ""],
+    ["36.5", "37.0"],
+    ["36.64", "37.0"],
+    ["A89.0", "89.0"],
+    ["B89.0", "89.0"],
+    ["89.0", "89.0"],
+    ["85.5", "89.0"],
+    ["91.665", "89.0"]
+  ]
+  checks_strictness: ${checks_strictness}
