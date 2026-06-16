@@ -19,6 +19,7 @@ import seaborn as sns
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
 from motif.eval.plot_style import (
     PANEL_HEIGHT,
+    SINGLE_COL_WIDTH,
     TALL_PANEL_HEIGHT,
     TWO_COL_WIDTH,
     apply_paper_style,
@@ -46,11 +47,15 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
     """Evaluation class that relates the quantitative metrics to the availability of
     the inputs in each sample.
 
-    It produces, for every metric, three ensembles of figures:
+    It produces, for every metric, four ensembles of figures:
 
     * line plots of the metric against the number of input observations in the sample;
     * line plots of the metric against the (binned) signed time difference between the
-      target and its temporally closest input;
+      target and its temporally closest input (across all sources);
+    * one multi-subplot figure showing, per input source, the metric against the
+      (binned) signed time difference to the closest observation of that source — this
+      reveals how reconstruction quality degrades as each individual source moves away
+      in time from the target;
     * bar plots and box plots of the metric for each input source, restricted to the
       samples that contain that source at least once.
 
@@ -93,11 +98,13 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         self.vs_min_dt_dir = self.metric_results_dir / "vs_min_dt"
         self.per_source_barplot_dir = self.metric_results_dir / "per_source_barplot"
         self.per_source_boxplot_dir = self.metric_results_dir / "per_source_boxplot"
+        self.vs_min_dt_per_source_dir = self.metric_results_dir / "vs_min_dt_per_source"
         for d in (
             self.vs_num_sources_dir,
             self.vs_min_dt_dir,
             self.per_source_barplot_dir,
             self.per_source_boxplot_dir,
+            self.vs_min_dt_per_source_dir,
         ):
             d.mkdir(parents=True, exist_ok=True)
 
@@ -128,8 +135,11 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         # across models under the sanity checks).
         n_input_obs, signed_closest_dt, input_sources = self._availability_features()
 
+        per_source_min_dt = self._per_source_min_dt_features()
+
         self._plot_vs_num_sources(per_sample, metric_cols, n_input_obs)
         self._plot_vs_min_dt(per_sample, metric_cols, signed_closest_dt)
+        self._plot_vs_min_dt_per_source(per_sample, metric_cols, per_source_min_dt)
         self._plot_per_source(per_sample, metric_cols, input_sources)
 
     def _aggregate_metrics(self):
@@ -187,6 +197,36 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         input_sources = inputs[keys + ["source_name"]].drop_duplicates()
 
         return n_input_obs, signed_closest_dt, input_sources
+
+    def _per_source_min_dt_features(self):
+        """Compute, for each (model_id, sample_index, source_name), the signed time
+        difference (hours) of the observation of that source that is temporally closest
+        to the target.
+
+        When a source appears in a sample under multiple ``source_index`` values,
+        this picks the index with the smallest absolute dt distance to the target and
+        records its signed dt.
+
+        Returns:
+            pd.DataFrame: columns [model_id, sample_index, source_name, source_min_dt].
+                One row per (model_id, sample_index, source_name) that has at least one
+                input observation for that source.
+        """
+        keys = ["model_id", "sample_index"]
+        inputs = self.samples_df[self.samples_df["avail"] == 1]
+        targets = self.samples_df[self.samples_df["avail"] == 0]
+
+        target_dt = targets.groupby(keys)["dt"].mean().reset_index(name="target_dt")
+        merged = inputs[keys + ["source_name", "dt"]].merge(target_dt, on=keys)
+        merged["signed"] = (merged["dt"] - merged["target_dt"]) / pd.Timedelta(hours=1)
+        merged["abs"] = merged["signed"].abs()
+
+        closest_idx = merged.groupby(keys + ["source_name"])["abs"].idxmin()
+        return (
+            merged.loc[closest_idx, keys + ["source_name", "signed"]]
+            .rename(columns={"signed": "source_min_dt"})
+            .reset_index(drop=True)
+        )
 
     def _metric_label(self, metric):
         """Return a display label for a metric column name."""
@@ -265,6 +305,91 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.vs_min_dt_dir / f"{metric}_vs_min_dt.svg")
+
+    def _plot_vs_min_dt_per_source(self, per_sample, metric_cols, per_source_min_dt):
+        """One multi-subplot figure per metric: each subplot shows the metric vs the
+        signed time difference (binned) to the closest observation of one input source.
+
+        Only samples that contain the source are included in that subplot. This lets
+        one examine how reconstruction quality evolves as each individual input source
+        moves further away in time from the target.
+        """
+        data = per_sample.merge(per_source_min_dt, on=["model_id", "sample_index"])
+        if data.empty:
+            return
+
+        # Apply the same bin edges as _plot_vs_min_dt, aligned to 0 at multiples of w.
+        w = self.dt_bin_width
+        dt_min = data["source_min_dt"].min()
+        dt_max = data["source_min_dt"].max()
+        start = np.floor(dt_min / w) * w
+        stop = np.ceil(dt_max / w) * w
+        edges = np.arange(start, stop + w, w)
+        if len(edges) < 2:
+            edges = np.array([start, start + w])
+        midpoints = (edges[:-1] + edges[1:]) / 2
+        data = data.copy()
+        bin_idx = pd.cut(data["source_min_dt"], bins=edges, labels=False, include_lowest=True)
+        data["dt_bin"] = midpoints[bin_idx.astype(int)]
+
+        # Display source names and stable ordering.
+        data["source"] = data["source_name"].map(self._display_src_name)
+        source_order = sorted(data["source"].unique())
+        n_sources = len(source_order)
+        if n_sources == 0:
+            return
+
+        all_models = sorted(data["model_id"].unique())
+        palette = dict(zip(all_models, get_model_palette(len(all_models))))
+        n_cols = min(n_sources, 3)
+        n_rows = int(np.ceil(n_sources / n_cols))
+
+        for metric in metric_cols:
+            fig, axes = plt.subplots(
+                n_rows,
+                n_cols,
+                figsize=(SINGLE_COL_WIDTH * n_cols, PANEL_HEIGHT * n_rows),
+                sharex=True,
+                sharey=True,
+                squeeze=False,
+            )
+            for idx, source in enumerate(source_order):
+                row, col = divmod(idx, n_cols)
+                ax = axes[row][col]
+                source_data = data[data["source"] == source]
+                sns.lineplot(
+                    data=source_data,
+                    x="dt_bin",
+                    y=metric,
+                    hue="model_id",
+                    estimator="mean",
+                    errorbar=("ci", 95),
+                    palette=palette,
+                    marker="o",
+                    legend=(idx == 0),
+                    ax=ax,
+                )
+                ax.set_title(source)
+                ax.set_xlabel("Min. signed dt (hours)")
+                ax.set_ylabel(self._metric_label(metric) if col == 0 else "")
+                ax.axvline(0.0, color="grey", linestyle="--", linewidth=1.0)
+                ax.grid(axis="y")
+                # Remove per-subplot legend; a shared figure legend is added below.
+                if ax.get_legend() is not None:
+                    ax.get_legend().remove()
+
+            # Hide unused axes in the last row.
+            for idx in range(n_sources, n_rows * n_cols):
+                row, col = divmod(idx, n_cols)
+                axes[row][col].set_visible(False)
+
+            legend_below(fig)
+            sns.despine(fig=fig)
+            plt.tight_layout()
+            self._save_fig(
+                fig,
+                self.vs_min_dt_per_source_dir / f"{metric}_vs_min_dt_per_source.svg",
+            )
 
     def _plot_per_source(self, per_sample, metric_cols, input_sources):
         """One bar plot and one box plot per metric: the metric distribution for each
