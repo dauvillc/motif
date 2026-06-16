@@ -15,6 +15,7 @@ from motif.eval.plot_style import (
     TWO_PANEL_HEIGHT,
     apply_paper_style,
     get_model_palette,
+    legend_below,
 )
 
 
@@ -171,10 +172,6 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             ax_psd.set_yscale("log")
             ax_psd.set_ylim(bottom=1e-2)
             ax_psd.grid(True, which="both", ls=":", lw=0.4, color="0.8")
-            if col == 0:
-                ax_psd.legend()
-            else:
-                ax_psd.get_legend().remove()
 
             # Row 1: PSD gain per model + reference line at 1
             sns.lineplot(
@@ -194,11 +191,11 @@ class RadiallyAveragedPSDEvaluation(AbstractMultisourceEvaluationMetric):
             ax_gain.set_yscale("log")
             ax_gain.set_ylim(bottom=1e-2, top=5)
             ax_gain.grid(True, which="both", ls=":", lw=0.4, color="0.8")
-            if col == 0:
-                ax_gain.legend()
-            else:
-                ax_gain.get_legend().remove()
 
+        for ax in axes.flat:
+            if ax.get_legend() is not None:
+                ax.get_legend().remove()
+        legend_below(fig)
         sns.despine(fig=fig)
         plt.tight_layout()
         plot_file = self.metric_results_dir / "psd_all_channels.png"

@@ -124,6 +124,55 @@ def apply_paper_style(use_latex: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
+def legend_below(container, ncol_max: int = 4, **kwargs):
+    """Place a legend below an Axes or Figure, with at most *ncol_max* columns per row.
+
+    Collects unique (handle, label) pairs from the container and places the
+    legend below it using ``bbox_to_anchor``.  ``savefig.bbox='tight'`` (set by
+    :func:`apply_paper_style`) ensures the legend is captured even when it
+    extends outside the figure boundary.
+
+    Args:
+        container: A :class:`matplotlib.axes.Axes` or
+            :class:`matplotlib.figure.Figure`.
+        ncol_max: Maximum number of legend columns.  When there are more
+            entries than *ncol_max*, they wrap onto additional rows.
+        **kwargs: Extra keyword arguments forwarded to ``legend()``.
+    """
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+    if isinstance(container, Axes):
+        handles, labels = container.get_legend_handles_labels()
+        ncol = min(ncol_max, len(handles)) if handles else 1
+        return container.legend(
+            handles=handles,
+            labels=labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.2),
+            ncol=ncol,
+            **kwargs,
+        )
+    elif isinstance(container, Figure):
+        seen: set = set()
+        handles, labels = [], []
+        for ax in container.get_axes():
+            for h, l in zip(*ax.get_legend_handles_labels()):
+                if l not in seen:
+                    seen.add(l)
+                    handles.append(h)
+                    labels.append(l)
+        ncol = min(ncol_max, len(handles)) if handles else 1
+        return container.legend(
+            handles=handles,
+            labels=labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.0),
+            ncol=ncol,
+            **kwargs,
+        )
+
+
 def get_model_palette(n_models: int) -> list:
     """Return a colorblind-safe palette for ``n_models`` distinct series.
 

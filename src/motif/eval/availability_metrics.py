@@ -23,6 +23,7 @@ from motif.eval.plot_style import (
     TWO_COL_WIDTH,
     apply_paper_style,
     get_model_palette,
+    legend_below,
 )
 
 # Columns of the quantitative full_results.json that are identifiers rather than metrics.
@@ -217,6 +218,7 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             ax.set_xlabel("Number of input observations")
             ax.set_ylabel(self._metric_label(metric))
             ax.grid(axis="y")
+            legend_below(ax)
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.vs_num_sources_dir / f"{metric}_vs_num_sources.svg")
@@ -259,6 +261,7 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             ax.set_ylabel(self._metric_label(metric))
             ax.axvline(0.0, color="grey", linestyle="--", linewidth=1.0)
             ax.grid(axis="y")
+            legend_below(ax)
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.vs_min_dt_dir / f"{metric}_vs_min_dt.svg")
@@ -290,6 +293,7 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             )
             ax.set_xlabel(self._metric_label(metric))
             ax.set_ylabel("Input source")
+            legend_below(ax)
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.per_source_barplot_dir / f"{metric}_per_source_bar.svg")
@@ -307,6 +311,7 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             )
             ax.set_xlabel(self._metric_label(metric))
             ax.set_ylabel("Input source")
+            legend_below(ax)
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.per_source_boxplot_dir / f"{metric}_per_source_box.svg")

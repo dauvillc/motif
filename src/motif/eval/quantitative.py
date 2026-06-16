@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from motif.datatypes import SourceIndex
 from motif.eval.abstract_evaluation_metric import AbstractMultisourceEvaluationMetric
-from motif.eval.plot_style import PANEL_HEIGHT, TWO_COL_WIDTH, apply_paper_style
+from motif.eval.plot_style import PANEL_HEIGHT, TWO_COL_WIDTH, apply_paper_style, get_model_palette
 
 
 def flatten_and_ignore_nans(pred: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -291,6 +291,10 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         n_models = results["model_id"].nunique()
         fig_width = max(TWO_COL_WIDTH, n_models * 1.75)
 
+        # Build a stable model→color mapping so the same model always gets the same color.
+        model_ids = results["model_id"].unique()
+        model_palette = dict(zip(model_ids, get_model_palette(len(model_ids))))
+
         # First, we'll show plots of the metrics for each model, over all sources and channels.
         # This gives a general overview of the models' performance.
         # MAE: we'll make a boxplot to show the distribution of MAE values for each model.
@@ -300,7 +304,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="mae",
             data=results,
             showfliers=False,
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("MAE")
@@ -321,7 +325,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="mae",
             data=results,
             errorbar=("ci", 95),
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("MAE")
@@ -342,7 +346,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="mape",
             data=results,
             errorbar=("ci", 95),
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("MAPE (%)")
@@ -363,7 +367,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="mape",
             data=results,
             showfliers=False,
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("MAPE (%)")
@@ -383,7 +387,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="rmse_mean",
             data=agg_results,
             errorbar=None,
-            color="steelblue",
+            palette=model_palette,
             ax=ax,
         )
         # Draw error bars manually for RMSE
@@ -417,7 +421,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="crps",
             data=results,
             showfliers=False,
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("CRPS")
@@ -438,7 +442,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="crps",
             data=results,
             errorbar=("ci", 95),
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("CRPS")
@@ -459,7 +463,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="corr",
             data=results,
             showfliers=False,
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("Correlation")
@@ -480,7 +484,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="corr",
             data=results,
             errorbar=("ci", 95),
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("Correlation")
@@ -501,7 +505,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="ssim",
             data=results,
             showfliers=False,
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("SSIM")
@@ -522,7 +526,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             y="ssim",
             data=results,
             errorbar=("ci", 95),
-            color="steelblue",
+            palette=model_palette,
         )
         plt.xlabel(self.xlabel)
         plt.ylabel("SSIM")
@@ -545,7 +549,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 y="ssr",
                 data=results,
                 showfliers=False,
-                color="steelblue",
+                palette=model_palette,
             )
             plt.xlabel(self.xlabel)
             plt.ylabel("SSR")
@@ -567,7 +571,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 y="ssr",
                 data=results,
                 errorbar=("ci", 95),
-                color="steelblue",
+                palette=model_palette,
             )
             plt.xlabel(self.xlabel)
             plt.ylabel("SSR")
@@ -593,7 +597,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 y="mae",
                 data=group,
                 showfliers=False,
-                color="steelblue",
+                palette=model_palette,
             )
             plt.title(f"MAE for {source_name} - {channel}")
             plt.xlabel(self.xlabel)
@@ -616,7 +620,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 x="model_id",
                 y="rmse",
                 data=rmse_per_model,
-                color="steelblue",
+                palette=model_palette,
             )
             plt.title(f"RMSE for {source_name} - {channel}")
             plt.xlabel(self.xlabel)
@@ -638,7 +642,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 x="model_id",
                 y="corr",
                 data=corr_per_model,
-                color="steelblue",
+                palette=model_palette,
             )
             plt.title(f"Correlation for {source_name} - {channel}")
             plt.xlabel(self.xlabel)
@@ -660,7 +664,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 x="model_id",
                 y="ssim",
                 data=ssim_per_model,
-                color="steelblue",
+                palette=model_palette,
             )
             plt.title(f"SSIM for {source_name} - {channel}")
             plt.xlabel(self.xlabel)

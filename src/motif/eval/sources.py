@@ -12,6 +12,7 @@ from motif.eval.plot_style import (
     TALL_PANEL_HEIGHT,
     TWO_COL_WIDTH,
     apply_paper_style,
+    legend_below,
 )
 
 
@@ -175,12 +176,7 @@ class SourcesRepresentationEvaluation(AbstractMultisourceEvaluationMetric):
             ax[1].set_xlabel("Count")
             ax[1].set_ylabel("Source combination")
             ax[1].tick_params(axis="y", labelsize=10)
-            # Make sure the legend does not overlap with the plots
-            fig.legend(
-                loc="upper center",
-                bbox_to_anchor=(0.5, 0.95),
-                ncol=len(quant["model_id"].unique()),
-            )
+            legend_below(fig)
             sns.despine(fig=fig)
             plt.tight_layout()
             crps_plot_file = self.metric_results_dir / "source_combinations_crps.png"
