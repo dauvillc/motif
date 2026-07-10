@@ -13,7 +13,7 @@ setup:
   slurm_signal_delay_s: 120
   slurm_additional_parameters:
     hint: nomultithread
-  local_setup:
+  slurm_setup:
     - source ${oc.env:HOME}/.bash_profile
     - h100
 

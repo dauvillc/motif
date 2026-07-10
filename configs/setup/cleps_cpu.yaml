@@ -10,7 +10,7 @@ setup:
   slurm_signal_delay_s: 120
   slurm_additional_parameters:
     hint: multithread
-  local_setup:
+  slurm_setup:
     - module purge
     - source ~/.bash_profile
     - mamba activate ms312

@@ -16,7 +16,7 @@ setup:
   slurm_signal_delay_s: 120
   slurm_additional_parameters:
     hint: nomultithread
-  local_setup:
+  slurm_setup:
     - first preparation command
     - second preparation command
     # add more commands as needed

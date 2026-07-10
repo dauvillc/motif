@@ -155,12 +155,20 @@ class TrainJob(submitit.helpers.Checkpointable):
             callbacks.append(UnusedParameterChecker())
 
         # Create the trainer
+        # `cfg` was flattened via OmegaConf.to_object() in main(), so nested `_target_` configs
+        # (e.g. trainer.strategy = DDPStrategy with an explicit process-group timeout) are not
+        # auto-instantiated by Hydra; instantiate explicitly, same as dataset/lightning_module above.
+        trainer_kwargs = dict(cfg["trainer"])
+        strategy_cfg = trainer_kwargs.get("strategy")
+        if isinstance(strategy_cfg, dict) and "_target_" in strategy_cfg:
+            trainer_kwargs["strategy"] = instantiate(strategy_cfg)
+
         trainer = pl.Trainer(
             logger=logger,
             log_every_n_steps=100,
             callbacks=callbacks,
             deterministic=True,
-            **cfg["trainer"],
+            **trainer_kwargs,
         )
 
         # Train the model
@@ -190,8 +198,18 @@ def _make_executor(cfg: dict[str, Any]) -> submitit.AutoExecutor:
     )
     folder.mkdir(parents=True, exist_ok=True)
 
+    # `AutoExecutor` only applies kwargs prefixed with the resolved cluster's name (`slurm` here) —
+    # inject as `export` lines into the sbatch preamble so they reach every rank on every node.
+    env_setup = [
+        "export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
+        "export TORCH_NCCL_WAIT_TIMEOUT_DUMP_MILSEC=100000",
+        f"export TORCH_NCCL_DEBUG_INFO_TEMP_FILE={(folder / 'nccl_trace_rank_').resolve()}",
+    ]
+    setup_cfg = dict(cfg["setup"])
+    setup_cfg["slurm_setup"] = env_setup + list(setup_cfg.get("slurm_setup", []))
+
     ex = submitit.AutoExecutor(folder=str(folder), slurm_max_num_timeout=20)
-    ex.update_parameters(**cfg["setup"])
+    ex.update_parameters(**setup_cfg)
     return ex
 
 

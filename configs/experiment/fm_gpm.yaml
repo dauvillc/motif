@@ -39,6 +39,3 @@ dataset:
           - tc_primed_pmw_SSMIS_F19
         # Min, max number of sources from the group
         availability: [1, 1]
-
-trainer:
-  strategy: ddp

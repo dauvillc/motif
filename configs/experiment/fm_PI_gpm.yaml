@@ -44,6 +44,3 @@ dataset:
       ir:
         sources: ['infrared']
         availability: [1, 1]
-
-trainer:
-  strategy: ddp

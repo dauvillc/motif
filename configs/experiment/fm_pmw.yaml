@@ -23,5 +23,3 @@ dataset:
         # Min, max number of sources from the group
         availability: [2, 2]
   
-trainer:
-  strategy: ddp
