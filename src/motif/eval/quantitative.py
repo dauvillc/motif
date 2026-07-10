@@ -72,7 +72,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         self.mae_dir = self.metric_results_dir / "mae"
         self.crps_dir = self.metric_results_dir / "crps"
         self.ssr_dir = self.metric_results_dir / "ssr"
-        self.corr_dir = self.metric_results_dir / "corr"
+        self.r2_dir = self.metric_results_dir / "r2"
         self.ssim_dir = self.metric_results_dir / "ssim"
         # Create the directories if they don't exist
         self.overall_metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -80,7 +80,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         self.mae_dir.mkdir(parents=True, exist_ok=True)
         self.crps_dir.mkdir(parents=True, exist_ok=True)
         self.ssr_dir.mkdir(parents=True, exist_ok=True)
-        self.corr_dir.mkdir(parents=True, exist_ok=True)
+        self.r2_dir.mkdir(parents=True, exist_ok=True)
         self.ssim_dir.mkdir(parents=True, exist_ok=True)
 
         # Within the label, replace double underscores with linebreaks and
@@ -179,7 +179,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                     mape = self._compute_mape(pred_data_channel, target_data_channel)
                     mse = self._compute_mse(pred_data_channel, target_data_channel)
                     crps = self._compute_crps(pred_data_channel, target_data_channel)
-                    corr = self._compute_corr(pred_data_channel, target_data_channel)
+                    r2 = self._compute_r2(pred_data_channel, target_data_channel)
                     ssim_val = self._compute_ssim(pred_data_channel, target_data_channel)
                     sample_results_dict = {
                         "model_id": model_id,
@@ -191,7 +191,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                         "mape": mape,
                         "mse": mse,
                         "crps": crps,
-                        "corr": corr,
+                        "r2": r2,
                         "ssim": ssim_val,
                     }
                     n_real = pred_data_channel.shape[0]
@@ -203,7 +203,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                             pred_data_channel, target_data_channel
                         )
                         sample_results_dict["ssr"] = np.sqrt(
-                            ((n_real + 1) / n_real) * (ensemble_var / ensemble_mean_mse)
+                            (n_real / (n_real + 1)) * (ensemble_var / ensemble_mean_mse)
                         )
                     results.append(sample_results_dict)
 
@@ -223,7 +223,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
                 mape_mean=("mape", "mean"),
                 mse_mean=("mse", "mean"),
                 crps_mean=("crps", "mean"),
-                corr_mean=("corr", "mean"),
+                r2_mean=("r2", "mean"),
                 ssim_mean=("ssim", "mean"),
             )
             .reset_index()
@@ -238,7 +238,7 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         for model_id in agg_results["model_id"]:
             model_results = results[results["model_id"] == model_id]
 
-            for metric in ["mae", "mape", "mse", "crps", "corr", "ssim"]:
+            for metric in ["mae", "mape", "mse", "crps", "r2", "ssim"]:
                 data = model_results[metric].values
                 # Bootstrap confidence interval
                 res = stats.bootstrap(
@@ -456,47 +456,47 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         plt.close()
         print(f"Overall CRPS bar plot saved to: {overall_crps_barplot_file}")
 
-        # Corr: boxplot
+        # R²: boxplot
         plt.figure(figsize=(fig_width, PANEL_HEIGHT))
         sns.boxplot(
             x="model_id",
-            y="corr",
+            y="r2",
             data=results,
             showfliers=False,
             palette=model_palette,
         )
         plt.xlabel(self.xlabel)
-        plt.ylabel("Correlation")
+        plt.ylabel("R²")
         plt.xticks(rotation=0)
         plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
-        overall_corr_plot_file = self.overall_metrics_dir / "corr_all_models.svg"
-        plt.savefig(overall_corr_plot_file)
-        plt.savefig(overall_corr_plot_file.with_suffix(".pdf"))
+        overall_r2_plot_file = self.overall_metrics_dir / "r2_all_models.svg"
+        plt.savefig(overall_r2_plot_file)
+        plt.savefig(overall_r2_plot_file.with_suffix(".pdf"))
         plt.close()
-        print(f"Overall Correlation plot saved to: {overall_corr_plot_file}")
+        print(f"Overall R² plot saved to: {overall_r2_plot_file}")
 
-        # Corr: barplot
+        # R²: barplot
         plt.figure(figsize=(fig_width, PANEL_HEIGHT))
         sns.barplot(
             x="model_id",
-            y="corr",
+            y="r2",
             data=results,
             errorbar=("ci", 95),
             palette=model_palette,
         )
         plt.xlabel(self.xlabel)
-        plt.ylabel("Correlation")
+        plt.ylabel("R²")
         plt.xticks(rotation=0)
         plt.grid(axis="y")
         sns.despine()
         plt.tight_layout()
-        overall_corr_barplot_file = self.overall_metrics_dir / "corr_barplot_all_models.svg"
-        plt.savefig(overall_corr_barplot_file)
-        plt.savefig(overall_corr_barplot_file.with_suffix(".pdf"))
+        overall_r2_barplot_file = self.overall_metrics_dir / "r2_barplot_all_models.svg"
+        plt.savefig(overall_r2_barplot_file)
+        plt.savefig(overall_r2_barplot_file.with_suffix(".pdf"))
         plt.close()
-        print(f"Overall Correlation bar plot saved to: {overall_corr_barplot_file}")
+        print(f"Overall R² bar plot saved to: {overall_r2_barplot_file}")
 
         # SSIM: boxplot
         plt.figure(figsize=(fig_width, PANEL_HEIGHT))
@@ -635,27 +635,27 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
             plt.close()
             print(f"RMSE plot saved to: {rmse_plot_file}")
 
-            # Corr per source/channel
-            corr_per_model = group.groupby("model_id")["corr"].mean().reset_index()
+            # R² per source/channel
+            r2_per_model = group.groupby("model_id")["r2"].mean().reset_index()
             plt.figure(figsize=(fig_width, PANEL_HEIGHT))
             sns.barplot(
                 x="model_id",
-                y="corr",
-                data=corr_per_model,
+                y="r2",
+                data=r2_per_model,
                 palette=model_palette,
             )
-            plt.title(f"Correlation for {source_name} - {channel}")
+            plt.title(f"R² for {source_name} - {channel}")
             plt.xlabel(self.xlabel)
-            plt.ylabel("Pearson Correlation")
+            plt.ylabel("R²")
             plt.xticks(rotation=0)
             plt.grid(axis="y")
             sns.despine()
             plt.tight_layout()
-            corr_plot_file = self.corr_dir / f"corr_{source_name}_{channel}.svg"
-            plt.savefig(corr_plot_file)
-            plt.savefig(corr_plot_file.with_suffix(".pdf"))
+            r2_plot_file = self.r2_dir / f"r2_{source_name}_{channel}.svg"
+            plt.savefig(r2_plot_file)
+            plt.savefig(r2_plot_file.with_suffix(".pdf"))
             plt.close()
-            print(f"Correlation plot saved to: {corr_plot_file}")
+            print(f"R² plot saved to: {r2_plot_file}")
 
             # SSIM per source/channel
             ssim_per_model = group.groupby("model_id")["ssim"].mean().reset_index()
@@ -707,9 +707,13 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         return ((pred_flat - target_flat) ** 2).mean().item()
 
     @staticmethod
-    def _compute_corr(pred_data: np.ndarray, target_data: np.ndarray) -> float:
-        """Computes the Pearson correlation coefficient between the predicted ensemble mean
-        and targets. Returns NaN if the target has no variance.
+    def _compute_r2(pred_data: np.ndarray, target_data: np.ndarray) -> float:
+        """Computes the R² (coefficient of determination) score between the predicted ensemble
+        mean and targets. Returns NaN if the target has no variance.
+
+        R² = 1 - SS_res / SS_tot, where SS_res = sum((target - pred)²) and
+        SS_tot = sum((target - mean(target))²). R² can be negative when the model performs
+        worse than predicting the mean.
 
         Args:
             pred_data (np.ndarray): Predicted data, of shape (M, ...) where M is the number of
@@ -720,9 +724,11 @@ class QuantitativeEvaluation(AbstractMultisourceEvaluationMetric):
         pred_flat, target_flat = flatten_and_ignore_nans(pred_data, target_data)
         # Average over realizations
         pred_flat = pred_flat.mean(axis=0)
-        if target_flat.std() == 0 or pred_flat.std() == 0:
+        ss_tot = ((target_flat - target_flat.mean()) ** 2).sum()
+        if ss_tot == 0:
             return float("nan")
-        return np.corrcoef(pred_flat, target_flat)[0, 1].item()
+        ss_res = ((target_flat - pred_flat) ** 2).sum()
+        return (1 - ss_res / ss_tot).item()
 
     @staticmethod
     def _compute_crps(pred_data: np.ndarray, target_data: np.ndarray) -> float:

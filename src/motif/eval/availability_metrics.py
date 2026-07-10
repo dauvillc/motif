@@ -37,7 +37,7 @@ _METRIC_LABELS = {
     "mse": "MSE",
     "rmse": "RMSE",
     "crps": "CRPS",
-    "corr": "Correlation",
+    "r2": "R²",
     "ssim": "SSIM",
     "ssr": "SSR",
 }
@@ -76,9 +76,10 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             model_data (dict): Dictionary mapping model_ids to model specifications.
             parent_results_dir (str or Path): Parent directory for all results.
             dt_bin_width (float): Width (in hours) of the signed time-difference bins
-                used for the "metric vs min dt" line plots. The bin edges are aligned
-                to the target time (0), i.e. they fall at integer multiples of this
-                value. Defaults to 0.5 (30 minutes).
+                used for the "metric vs min dt" line plots. Bins are centered on the
+                target time (0), i.e. bin midpoints fall at integer multiples of this
+                value, and bin edges fall at odd multiples of half the value.
+                Defaults to 0.5 (30 minutes).
             num_workers (int): Here for compatibility.
             **kwargs: Additional keyword arguments passed to the parent class
                 (source_name_replacements, channel_replacements, checks_strictness).
@@ -140,7 +141,9 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         self._plot_vs_num_sources(per_sample, metric_cols, n_input_obs)
         self._plot_vs_min_dt(per_sample, metric_cols, signed_closest_dt)
         self._plot_vs_min_dt_per_source(per_sample, metric_cols, per_source_min_dt)
+        self._plot_source_counts_vs_dt(per_source_min_dt)
         self._plot_per_source(per_sample, metric_cols, input_sources)
+        self._plot_source_sample_counts(input_sources)
 
     def _aggregate_metrics(self):
         """Aggregate the quantitative metrics over channels and target sources.
@@ -270,11 +273,12 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         if data.empty:
             return
 
-        # Build bin edges aligned to the target time (0), at multiples of dt_bin_width.
+        # Build bin edges so that 0 is a bin center (midpoints at multiples of w).
         w = self.dt_bin_width
+        half_w = w / 2
         dt_min, dt_max = data["signed_closest_dt"].min(), data["signed_closest_dt"].max()
-        start = np.floor(dt_min / w) * w
-        stop = np.ceil(dt_max / w) * w
+        start = np.floor((dt_min - half_w) / w) * w + half_w
+        stop = np.ceil((dt_max - half_w) / w) * w + half_w
         edges = np.arange(start, stop + w, w)
         if len(edges) < 2:
             edges = np.array([start, start + w])
@@ -318,12 +322,13 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
         if data.empty:
             return
 
-        # Apply the same bin edges as _plot_vs_min_dt, aligned to 0 at multiples of w.
+        # Apply the same bin edges as _plot_vs_min_dt: 0 is a center, not an edge.
         w = self.dt_bin_width
+        half_w = w / 2
         dt_min = data["source_min_dt"].min()
         dt_max = data["source_min_dt"].max()
-        start = np.floor(dt_min / w) * w
-        stop = np.ceil(dt_max / w) * w
+        start = np.floor((dt_min - half_w) / w) * w + half_w
+        stop = np.ceil((dt_max - half_w) / w) * w + half_w
         edges = np.arange(start, stop + w, w)
         if len(edges) < 2:
             edges = np.array([start, start + w])
@@ -391,6 +396,65 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
                 self.vs_min_dt_per_source_dir / f"{metric}_vs_min_dt_per_source.svg",
             )
 
+    def _plot_source_counts_vs_dt(self, per_source_min_dt):
+        """Single figure: for each input source, the number of samples vs the signed
+        time difference (binned) to the closest observation of that source.
+
+        This reveals which sources were widely or rarely available, and how their
+        temporal coverage is distributed relative to the target time.
+        """
+        data = per_source_min_dt.copy()
+        if data.empty:
+            return
+
+        # Apply the same bin edges as _plot_vs_min_dt_per_source: 0 is a center.
+        w = self.dt_bin_width
+        half_w = w / 2
+        dt_min = data["source_min_dt"].min()
+        dt_max = data["source_min_dt"].max()
+        start = np.floor((dt_min - half_w) / w) * w + half_w
+        stop = np.ceil((dt_max - half_w) / w) * w + half_w
+        edges = np.arange(start, stop + w, w)
+        if len(edges) < 2:
+            edges = np.array([start, start + w])
+        midpoints = (edges[:-1] + edges[1:]) / 2
+        bin_idx = pd.cut(data["source_min_dt"], bins=edges, labels=False, include_lowest=True)
+        data["dt_bin"] = midpoints[bin_idx.astype(int)]
+        data["source"] = data["source_name"].map(self._display_src_name)
+
+        # Deduplicate across model_ids — availability is typically model-independent;
+        # with checks_strictness="targets_only" this picks one count per sample/source/bin.
+        data = data.drop_duplicates(subset=["sample_index", "source_name", "dt_bin"])
+
+        counts = data.groupby(["source", "dt_bin"]).size().reset_index(name="n_samples")
+
+        source_order = sorted(counts["source"].unique())
+        n_sources = len(source_order)
+        if n_sources == 0:
+            return
+
+        palette = get_model_palette(n_sources)
+        source_colors = dict(zip(source_order, palette))
+
+        fig, ax = plt.subplots(figsize=(TWO_COL_WIDTH, PANEL_HEIGHT))
+        for source in source_order:
+            src_data = counts[counts["source"] == source].sort_values("dt_bin")
+            ax.plot(
+                src_data["dt_bin"],
+                src_data["n_samples"],
+                marker="o",
+                label=source,
+                color=source_colors[source],
+            )
+        ax.set_xlabel("Min. signed dt to source (hours)")
+        ax.set_ylabel("Number of samples")
+        ax.axvline(0.0, color="grey", linestyle="--", linewidth=1.0)
+        ax.grid(axis="y")
+        legend_below(ax)
+        sns.despine(fig=fig)
+        plt.tight_layout()
+        self._save_fig(fig, self.vs_min_dt_per_source_dir / "source_counts_vs_dt.svg")
+
     def _plot_per_source(self, per_sample, metric_cols, input_sources):
         """One bar plot and one box plot per metric: the metric distribution for each
         input source, over the samples that contain that source at least once."""
@@ -440,3 +504,38 @@ class AvailabilityMetricsEvaluation(AbstractMultisourceEvaluationMetric):
             sns.despine(fig=fig)
             plt.tight_layout()
             self._save_fig(fig, self.per_source_boxplot_dir / f"{metric}_per_source_box.svg")
+
+    def _plot_source_sample_counts(self, input_sources):
+        """Horizontal bar chart: number of samples containing each input source.
+
+        Saved alongside the per-source box plots so the two figures can be placed
+        side-by-side, letting the reader gauge how representative each source's
+        metric distribution is given its frequency in the dataset.
+        """
+        if input_sources.empty:
+            return
+        data = input_sources.copy()
+        data["source"] = data["source_name"].map(self._display_src_name)
+        source_order = sorted(data["source"].unique())
+        counts = (
+            data.groupby(["model_id", "source"])["sample_index"]
+            .nunique()
+            .reset_index(name="n_samples")
+        )
+        palette = get_model_palette(counts["model_id"].nunique())
+        fig, ax = plt.subplots(figsize=(TWO_COL_WIDTH, TALL_PANEL_HEIGHT))
+        sns.barplot(
+            data=counts,
+            x="n_samples",
+            y="source",
+            hue="model_id",
+            order=source_order,
+            palette=palette,
+            ax=ax,
+        )
+        ax.set_xlabel("Number of samples")
+        ax.set_ylabel("Input source")
+        legend_below(ax)
+        sns.despine(fig=fig)
+        plt.tight_layout()
+        self._save_fig(fig, self.per_source_boxplot_dir / "source_sample_counts.svg")
